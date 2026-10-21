@@ -162,7 +162,7 @@ fn print_usage() {
     eprintln!("       picturesque-marks underline [OPTIONS] SEED");
     eprintln!("  TAG                  tag string the background is generated from (default: A)");
     eprintln!(
-        "                       two or more tags are sorted and up to four are composed in a 2x2 grid"
+        "                       up to four tags are composed in a 2x2 grid, in the given order"
     );
     eprintln!("  --size, -s W[xH]     icon width and height (default: 100)");
     eprintln!("  --signature, -g TEXT draw a hand-drawn style curve generated from TEXT on top");

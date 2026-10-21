@@ -105,8 +105,8 @@ pub fn underline_svg(seed: &str, tags: &[impl AsRef<str>], options: &UnderlineOp
 
 /// Returns the stroke colors for the tags, or `None` when there are no tags.
 ///
-/// The tags are sorted and cut to [`MAX_COMPOSED_TAGS`], as the composed icon
-/// does, so the colors follow the tiles of the icon. The colors are picked
+/// The tags are cut to [`MAX_COMPOSED_TAGS`] in the given order, as the
+/// composed icon does, so the colors follow the tiles of the icon. The colors are picked
 /// in this order until there are [`STROKES`] of them:
 ///
 /// 1. the main shape of the first, second and third tag
@@ -114,12 +114,10 @@ pub fn underline_svg(seed: &str, tags: &[impl AsRef<str>], options: &UnderlineOp
 ///    shape before its second
 /// 3. the first color again, as often as needed
 pub fn underline_colors(tags: &[impl AsRef<str>]) -> Option<[Color; STROKES]> {
-    let mut sorted: Vec<&str> = tags.iter().map(AsRef::as_ref).collect();
-    sorted.sort_unstable();
-    let backgrounds: Vec<_> = sorted
+    let backgrounds: Vec<_> = tags
         .iter()
         .take(MAX_COMPOSED_TAGS.min(STROKES))
-        .map(|tag| IconBuilder::background_colors(tag))
+        .map(|tag| IconBuilder::background_colors(tag.as_ref()))
         .collect();
     let first = backgrounds.first()?;
     let mains = backgrounds.iter().map(|bg| bg.main);
@@ -274,10 +272,10 @@ mod tests {
     }
 
     #[test]
-    fn three_tags_give_their_main_colors_in_sorted_order() {
+    fn three_tags_give_their_main_colors_in_the_given_order() {
         let colors = underline_colors(&["cherry", "apple", "banana"]).unwrap();
         let main = |tag| IconBuilder::background_colors(tag).main;
-        assert_eq!(colors, [main("apple"), main("banana"), main("cherry")]);
+        assert_eq!(colors, [main("cherry"), main("apple"), main("banana")]);
         let svg = underline_svg("post", &["cherry", "apple", "banana"], &UnderlineOptions::default());
         let strokes: Vec<&str> = svg.match_indices("stroke=\"").map(|(pos, m)| &svg[pos + m.len()..pos + m.len() + 7]).collect();
         assert_eq!(strokes, [hex(colors[0]), hex(colors[1]), hex(colors[2])]);
@@ -299,7 +297,7 @@ mod tests {
         assert!(short.sub1.is_none() && short.sub2.is_none());
 
         let colors = underline_colors(&["xyz", "abcdefghij"]).unwrap();
-        assert_eq!(colors, [long.main, short.main, long.sub1.unwrap()]);
+        assert_eq!(colors, [short.main, long.main, long.sub1.unwrap()]);
 
         let colors = underline_colors(&["abcdefghij"]).unwrap();
         assert_eq!(colors, [long.main, long.sub1.unwrap(), long.sub2.unwrap()]);

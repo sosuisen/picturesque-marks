@@ -30,7 +30,8 @@ let svg = generate_ptag("apple", 100, 100);
 // ForegroundStyle::Face is NoCrossing plus two short vertical bars as eyes.
 let svg = generate_icon("apple", "Hidekazu", ForegroundStyle::Crossing, 128, 128);
 
-// Multiple tags: sorted, then up to four are composed in a 2x2 grid.
+// Multiple tags: up to four are composed in a 2x2 grid, in the given order.
+// The first tag is the top-left tile, so put the main tag first.
 // The signature curve is drawn once over the whole icon.
 use picturesque_marks::generate_icon_from_tags;
 let svg = generate_icon_from_tags(&["cardbox", "card"], "Hidekazu", ForegroundStyle::NoCrossing, 128, 128);
@@ -80,7 +81,7 @@ Three strokes are drawn. Their colors are picked from the tags in this order, un
 2. The sub shape colors of the first, second and third tag. Each tag's first sub shape comes before its second.
 3. The first color again, as often as needed.
 
-The tags are sorted and cut to four first, as the composed icon does, so the colors follow the tiles of the icon.
+The tags are cut to four in the given order, as the composed icon does, so the colors follow the tiles of the icon.
 `IconBuilder::background_colors(tag)` gives the main and sub shape colors of one tag.
 With no tags, all three colors come from the palette, chosen by the seed.
 
@@ -91,7 +92,7 @@ cargo run -- --size 128 apple > apple.svg
 cargo run -- --size 128x96 --signature Hidekazu apple > apple.svg
 cargo run -- --size 128 --signature Hidekazu --style no-crossing apple > apple.svg
 cargo run -- --size 128 --signature Hidekazu --style face apple > apple.svg
-# Multiple tags are sorted and up to four are composed in a 2x2 grid
+# Up to four tags are composed in a 2x2 grid, in the given order
 cargo run -- --size 128 --signature Hidekazu cardbox card > cardbox_card.svg
 # Underlines: the seed comes first, then the tags
 cargo run -- underline --spikes my-post cardbox card > my-post_underline.svg

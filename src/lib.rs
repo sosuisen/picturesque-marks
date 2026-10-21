@@ -61,8 +61,9 @@ pub fn generate_icon(
 ///
 /// - No tags: returns the default icon.
 /// - One tag: returns the icon for that tag.
-/// - Two or more tags: sorts them, takes up to four, and composes them
+/// - Two or more tags: takes up to four in the given order and composes them
 ///   into one icon in the order top-left, top-right, bottom-left, bottom-right.
+///   The order is kept because the caller puts the main tag first.
 ///   The signature curve is drawn once, large, over the whole composed icon.
 pub fn generate_icon_from_tags(
     tags: &[impl AsRef<str>],
@@ -96,8 +97,8 @@ fn generate_from_tags(
 
 /// Composes several tags into one icon.
 ///
-/// Sorts the tags by Unicode code point and lays out up to four of them
-/// as W/2 x H/2 tiles in a 2 x 2 grid.
+/// Lays out up to four of the tags, in the given order, as W/2 x H/2 tiles
+/// in a 2 x 2 grid. The first tag is the top-left tile.
 /// Each tile is embedded as a nested `<svg>`, so shapes outside a tile are clipped.
 /// The signature curve, if any, is drawn once over the whole icon, not per tile.
 fn compose_icons(
@@ -106,13 +107,11 @@ fn compose_icons(
     height: i32,
     foreground: Option<Foreground<'_>>,
 ) -> String {
-    let mut sorted: Vec<&str> = tags.iter().map(AsRef::as_ref).collect();
-    sorted.sort_unstable();
-
     let tile_width = width / 2;
     let tile_height = height / 2;
-    let mut layers: Vec<String> = sorted
+    let mut layers: Vec<String> = tags
         .iter()
+        .map(AsRef::as_ref)
         .take(MAX_COMPOSED_TAGS)
         .enumerate()
         .map(|(i, tag)| {
@@ -207,12 +206,12 @@ mod tests {
     }
 
     #[test]
-    fn multiple_tags_are_sorted_and_tiled() {
-        let svg = generate_ptag_from_tags(&["banana", "apple"], 100, 80);
+    fn multiple_tags_are_tiled_in_the_given_order() {
+        let svg = generate_ptag_from_tags(&["apple", "banana"], 100, 80);
         assert!(svg.starts_with(
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80" viewBox="0 0 100 80">"#
         ));
-        // After sorting, apple is top-left and banana is top-right.
+        // The first tag is top-left and the second is top-right.
         let apple_tile = svg.find(r#"<svg x="0" y="0" "#).expect("top-left tile");
         let banana_tile = svg.find(r#"<svg x="50" y="0" "#).expect("top-right tile");
         assert!(apple_tile < banana_tile);
