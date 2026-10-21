@@ -1,8 +1,12 @@
 //! Color palette and brightness adjustment.
 //!
-//! The palette comes from two triad schemes picked at <https://color.adobe.com/>.
-//! triad01: #EBAE9B, #9BA9EB, #C0EB9B
-//! triad02: #EB9BB6, #9BDAEB, #EBE49A
+//! The palette is six hues 60 degrees apart, all with the same saturation and
+//! lightness. They form two triads that are offset by 60 degrees.
+//! Yellow alone sits at 46 instead of 60. A 60-degree yellow has a lot of green
+//! and looks too bright to the eye. Pulling it toward orange makes it easier
+//! to see. See ADR-001.
+//! triad01: #EB9B9B (0), #9BEB9B (120), #9B9BEB (240)
+//! triad02: #EBD89B (46), #9BEBEB (180), #EB9BEB (300)
 
 /// RGB color. Alpha is not handled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,20 +98,20 @@ impl Color {
 /// Named palette color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ColorName {
-    Orange,
+    Red,
     Blue,
     Green,
-    Pink,
+    Magenta,
     Cyan,
     Yellow,
 }
 
 impl ColorName {
     pub const ALL: [ColorName; 6] = [
-        ColorName::Orange,
+        ColorName::Red,
         ColorName::Blue,
         ColorName::Green,
-        ColorName::Pink,
+        ColorName::Magenta,
         ColorName::Cyan,
         ColorName::Yellow,
     ];
@@ -121,12 +125,12 @@ impl ColorName {
 
     pub fn color(self) -> Color {
         match self {
-            ColorName::Orange => Color::rgb(0xEB, 0xAE, 0x9B),
-            ColorName::Blue => Color::rgb(0x9B, 0xA9, 0xEB),
-            ColorName::Green => Color::rgb(0xC0, 0xEB, 0x9B),
-            ColorName::Pink => Color::rgb(0xEB, 0x9B, 0xB6),
-            ColorName::Cyan => Color::rgb(0x9B, 0xDA, 0xEB),
-            ColorName::Yellow => Color::rgb(0xEB, 0xE4, 0x9A),
+            ColorName::Red => Color::rgb(0xEB, 0x9B, 0x9B),
+            ColorName::Blue => Color::rgb(0x9B, 0x9B, 0xEB),
+            ColorName::Green => Color::rgb(0x9B, 0xEB, 0x9B),
+            ColorName::Magenta => Color::rgb(0xEB, 0x9B, 0xEB),
+            ColorName::Cyan => Color::rgb(0x9B, 0xEB, 0xEB),
+            ColorName::Yellow => Color::rgb(0xEB, 0xD8, 0x9B),
         }
     }
 }
@@ -137,7 +141,7 @@ mod tests {
 
     #[test]
     fn to_hex_is_uppercase_with_hash() {
-        assert_eq!(ColorName::Orange.color().to_hex(), "#EBAE9B");
+        assert_eq!(ColorName::Red.color().to_hex(), "#EB9B9B");
     }
 
     #[test]
