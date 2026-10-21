@@ -106,6 +106,14 @@ Generates an HTML page with the same tag list as the original Blazor demo, plus 
 cargo run --example gallery > gallery.html
 ```
 
+### Swatches
+
+Generates an HTML page that shows every palette color crossed with every hatch pattern, one matrix per shape. Use it to tune the colors and the patterns by eye.
+
+```sh
+cargo run --example swatches > swatches.html
+```
+
 ## Tests
 
 ```sh
