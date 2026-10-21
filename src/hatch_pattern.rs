@@ -61,10 +61,12 @@ impl HatchPatternType {
         // Rotating a vertical-line pattern by 45 degrees avoids that.
         let (size, rotate, children): (i32, Option<i32>, Vec<String>) = match self {
             HatchPatternType::DownwardDiagonal => (10, Some(-45), vec![line(5, 0, 5, 10, 3)]),
+            // A stroke that crosses the tile edge is clipped there and leaves a
+            // thin gap, so keep every stroke inside the tile.
             HatchPatternType::DownwardDiagonalReverse => (
-                10,
+                12,
                 Some(-45),
-                vec![line(2, 0, 2, 10, 5), line(8, 0, 8, 10, 3)],
+                vec![line(3, 0, 3, 12, 5), line(9, 0, 9, 12, 3)],
             ),
             HatchPatternType::UpwardDiagonal => (10, Some(45), vec![line(5, 0, 5, 10, 2)]),
             HatchPatternType::UpwardDiagonalThick => (10, Some(45), vec![line(5, 0, 5, 10, 5)]),
