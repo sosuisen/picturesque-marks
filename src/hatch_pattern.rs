@@ -74,7 +74,7 @@ impl HatchPatternType {
             HatchPatternType::DiagonalCross => {
                 (10, None, vec![line(0, 0, 10, 10, 3), line(0, 10, 10, 0, 3)])
             }
-            HatchPatternType::Dots => (7, None, vec![line(1, 0, 1, 2, 2)]),
+            HatchPatternType::Dots => (8, None, vec![rect(0, 0, 4, 4)]),
             HatchPatternType::PolkaDots => (20, None, vec![circle(4, 4, 4), circle(14, 14, 4)]),
             HatchPatternType::Checker => (20, None, vec![rect(0, 0, 10, 10), rect(10, 10, 10, 10)]),
             HatchPatternType::Fill => return None,
