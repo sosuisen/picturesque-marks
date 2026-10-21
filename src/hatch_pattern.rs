@@ -2,7 +2,7 @@
 
 use crate::colors::Color;
 
-/// Lightness factor applied to the color of the `Dots` pattern.
+/// Lightness factor applied to the color of the `Dots` pattern. See ADR-002.
 const DOTS_BRIGHTNESS: f64 = 0.8;
 
 /// Kind of hatch pattern. `Fill` means a solid fill.
