@@ -6,7 +6,7 @@ use crate::colors::Color;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HatchPatternType {
     DownwardDiagonal,
-    DownwardDiagonalReverse,
+    DownwardDiagonalThickThin,
     UpwardDiagonal,
     UpwardDiagonalThick,
     Horizontal,
@@ -22,7 +22,7 @@ pub enum HatchPatternType {
 impl HatchPatternType {
     pub const ALL: [HatchPatternType; 12] = [
         HatchPatternType::DownwardDiagonal,
-        HatchPatternType::DownwardDiagonalReverse,
+        HatchPatternType::DownwardDiagonalThickThin,
         HatchPatternType::UpwardDiagonal,
         HatchPatternType::UpwardDiagonalThick,
         HatchPatternType::Horizontal,
@@ -63,7 +63,7 @@ impl HatchPatternType {
             HatchPatternType::DownwardDiagonal => (10, Some(-45), vec![line(5, 0, 5, 10, 3)]),
             // A stroke that crosses the tile edge is clipped there and leaves a
             // thin gap, so keep every stroke inside the tile.
-            HatchPatternType::DownwardDiagonalReverse => (
+            HatchPatternType::DownwardDiagonalThickThin => (
                 12,
                 Some(-45),
                 vec![line(3, 0, 3, 12, 5), line(9, 0, 9, 12, 3)],
