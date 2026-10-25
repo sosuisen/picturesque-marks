@@ -53,7 +53,7 @@ const TAGS: &[&str] = &[
 
 // Tag combinations from Cards.cs in the original repository. Used to check multi-tag composition.
 const TAG_SETS: &[&[&str]] = &[
-    &["フリークライミング", "card"],
+    &["パッションフルーツ", "card"],
     &["cardbox", "card"],
     &["cardbox", "card", "framework"],
     &["zucchini", "yuzu", "xigua", "watermelon", "vanilla"],
@@ -62,12 +62,12 @@ const TAG_SETS: &[&[&str]] = &[
 
 // A few examples with a signature curve. Each entry is (signature, style, tags).
 const SIGNED: &[(&str, ForegroundStyle, &[&str])] = &[
-    ("Alice", ForegroundStyle::Crossing, &["apple"]),
-    ("Alice", ForegroundStyle::NoCrossing, &["apple"]),
-    ("Bob", ForegroundStyle::Crossing, &["apple"]),
-    ("Bob", ForegroundStyle::NoCrossing, &["apple"]),
-    ("Alice", ForegroundStyle::Face, &["apple"]),
-    ("Bob", ForegroundStyle::Face, &["apple"]),
+    ("Alice", ForegroundStyle::Crossing, &["banana"]),
+    ("Alice", ForegroundStyle::NoCrossing, &["banana"]),
+    ("Bob", ForegroundStyle::Crossing, &["banana"]),
+    ("Bob", ForegroundStyle::NoCrossing, &["banana"]),
+    ("Alice", ForegroundStyle::Face, &["banana"]),
+    ("Bob", ForegroundStyle::Face, &["banana"]),
     ("Alice", ForegroundStyle::Crossing, &["cardbox", "card"]),
     (
         "Bob",
