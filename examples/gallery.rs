@@ -8,8 +8,8 @@
 //! Run: `cargo run --example gallery > gallery.html`
 
 use picturesque_marks::{
-    ForegroundStyle, UnderlineOptions, generate_icon, generate_icon_from_tags, generate_ptag,
-    generate_ptag_from_tags, underline_svg,
+    compose_ptag, generate_icon, generate_icon_from_tags, generate_ptag, generate_ptag_from_tags,
+    underline_svg, ComposeLayout, ForegroundStyle, UnderlineOptions,
 };
 
 const TAGS: &[&str] = &[
@@ -109,15 +109,14 @@ fn main() {
     }
     println!("</div>");
 
-    println!("<h2>Multiple tags</h2>");
-    println!("<div style=\"display:flex;flex-wrap:wrap;\">");
-    for tags in TAG_SETS {
-        figure(
-            &generate_ptag_from_tags(tags, size, size),
-            &tags_caption(tags),
-        );
+    for layout in [ComposeLayout::Grid, ComposeLayout::Overlay] {
+        println!("<h2>Multiple tags ({layout:?})</h2>");
+        println!("<div style=\"display:flex;flex-wrap:wrap;\">");
+        for tags in TAG_SETS {
+            figure(&compose_ptag(tags, layout, size, size), &tags_caption(tags));
+        }
+        println!("</div>");
     }
-    println!("</div>");
 
     println!("<h2>With signature</h2>");
     println!("<div style=\"display:flex;flex-wrap:wrap;\">");

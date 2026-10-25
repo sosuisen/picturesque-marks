@@ -30,11 +30,17 @@ let svg = generate_ptag("apple", 100, 100);
 // ForegroundStyle::Face is NoCrossing plus two short vertical bars as eyes.
 let svg = generate_icon("apple", "Hidekazu", ForegroundStyle::Crossing, 128, 128);
 
-// Multiple tags: up to four are composed in a 2x2 grid, in the given order.
-// The first tag is the top-left tile, so put the main tag first.
+// Multiple tags: up to four are composed into one icon, in the given order.
+// The layout is named by `ComposeLayout`. Put the main tag first in both layouts.
+// - `Overlay` (default): the first tag at full size, the others as half-transparent tiles over it.
+//   One more tag goes bottom-right. Two go top-right and bottom-left.
+//   Three go top-right, bottom-left and bottom-right.
+// - `Grid`: a 2x2 grid of tiles. The first tag is the top-left tile.
 // The signature curve is drawn once over the whole icon.
-use picturesque_marks::generate_icon_from_tags;
-let svg = generate_icon_from_tags(&["cardbox", "card"], "Hidekazu", ForegroundStyle::NoCrossing, 128, 128);
+use picturesque_marks::{ComposeLayout, compose_icon};
+let svg = compose_icon(&["cardbox", "card"], ComposeLayout::Grid, "Hidekazu", ForegroundStyle::NoCrossing, 128, 128);
+let svg = compose_icon(&["cardbox", "card"], ComposeLayout::Overlay, "Hidekazu", ForegroundStyle::NoCrossing, 128, 128);
+// `generate_icon_from_tags` and `generate_ptag_from_tags` are the same with the default layout.
 ```
 
 Use `IconBuilder` directly for finer control.
@@ -92,8 +98,9 @@ cargo run -- --size 128 apple > apple.svg
 cargo run -- --size 128x96 --signature Hidekazu apple > apple.svg
 cargo run -- --size 128 --signature Hidekazu --style no-crossing apple > apple.svg
 cargo run -- --size 128 --signature Hidekazu --style face apple > apple.svg
-# Up to four tags are composed in a 2x2 grid, in the given order
-cargo run -- --size 128 --signature Hidekazu cardbox card > cardbox_card.svg
+# Up to four tags are composed into one icon, in the given order. --layout is overlay (default) or grid
+cargo run -- --size 128 --signature Hidekazu --layout grid cardbox card > cardbox_card.svg
+cargo run -- --size 128 --signature Hidekazu --layout overlay cardbox card > cardbox_card_overlay.svg
 # Underlines: the seed comes first, then the tags
 cargo run -- underline --spikes my-post cardbox card > my-post_underline.svg
 cargo run -- underline --class heading-underline --stroke-width 1.5 "my-post#h2-0" cardbox card > h2.svg

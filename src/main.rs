@@ -1,14 +1,13 @@
 //! Generates an SVG from the command line and writes it to stdout.
 //!
 //! Usage:
-//! - `picturesque-marks [--size W[xH]] [--signature TEXT] [--style crossing|no-crossing|face] [TAG...]`
+//! - `picturesque-marks [--size W[xH]] [--signature TEXT] [--style crossing|no-crossing|face] [--layout grid|overlay] [TAG...]`
 //! - `picturesque-marks underline [--spikes] [--class NAME] [--stroke-width W] SEED [TAG...]`
 
 use std::process::ExitCode;
 
 use picturesque_marks::{
-    ForegroundStyle, UnderlineOptions, generate_icon_from_tags, generate_ptag_from_tags,
-    underline_svg,
+    compose_icon, compose_ptag, underline_svg, ComposeLayout, ForegroundStyle, UnderlineOptions,
 };
 
 fn main() -> ExitCode {
@@ -26,6 +25,7 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
     let mut height = 100;
     let mut signature: Option<String> = None;
     let mut style = ForegroundStyle::default();
+    let mut layout = ComposeLayout::default();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -53,6 +53,22 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
                     "face" => ForegroundStyle::Face,
                     _ => {
                         eprintln!("style must be crossing, no-crossing or face: {value}");
+                        print_usage();
+                        return ExitCode::FAILURE;
+                    }
+                };
+            }
+            "--layout" | "-l" => {
+                let Some(value) = args.next() else {
+                    eprintln!("--layout requires a value");
+                    print_usage();
+                    return ExitCode::FAILURE;
+                };
+                layout = match value.as_str() {
+                    "grid" => ComposeLayout::Grid,
+                    "overlay" => ComposeLayout::Overlay,
+                    _ => {
+                        eprintln!("layout must be grid or overlay: {value}");
                         print_usage();
                         return ExitCode::FAILURE;
                     }
@@ -86,8 +102,8 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
     }
 
     let svg = match signature {
-        Some(signature) => generate_icon_from_tags(&tags, &signature, style, width, height),
-        None => generate_ptag_from_tags(&tags, width, height),
+        Some(signature) => compose_icon(&tags, layout, &signature, style, width, height),
+        None => compose_ptag(&tags, layout, width, height),
     };
     println!("{svg}");
     ExitCode::SUCCESS
@@ -157,16 +173,20 @@ fn parse_size(value: &str) -> Option<(i32, i32)> {
 
 fn print_usage() {
     eprintln!(
-        "usage: picturesque-marks [--size W[xH]] [--signature TEXT] [--style STYLE] [TAG...]"
+        "usage: picturesque-marks [--size W[xH]] [--signature TEXT] [--style STYLE] [--layout LAYOUT] [TAG...]"
     );
     eprintln!("       picturesque-marks underline [OPTIONS] SEED");
     eprintln!("  TAG                  tag string the background is generated from (default: A)");
     eprintln!(
-        "                       up to four tags are composed in a 2x2 grid, in the given order"
+        "                       up to four tags are composed into one icon, in the given order"
     );
     eprintln!("  --size, -s W[xH]     icon width and height (default: 100)");
     eprintln!("  --signature, -g TEXT draw a hand-drawn style curve generated from TEXT on top");
     eprintln!("  --style, -t STYLE    curve style: crossing (default), no-crossing or face");
+    eprintln!("  --layout, -l LAYOUT  how several tags are composed (default: overlay)");
+    eprintln!("                       grid: a 2x2 grid of tiles in the given order");
+    eprintln!("                       overlay: the first tag at full size, the others as");
+    eprintln!("                       half-transparent tiles over it");
     eprintln!("  underline            draw a sketchy underline instead; see `underline --help`");
 }
 
