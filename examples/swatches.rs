@@ -10,10 +10,6 @@ use picturesque_marks::{ColorName, HatchPatternType, IconBuilder, ShapeType};
 const SIZE: i32 = 128;
 
 /// One swatch: a full-size shape filled with the hatch in the color.
-///
-/// Every icon names its pattern `pat0`. Inline SVGs share one HTML document,
-/// so the ids would collide and every swatch would show the first pattern.
-/// Rename the id per swatch to keep them apart.
 fn swatch(shape: ShapeType, color: ColorName, hatch: HatchPatternType) -> String {
     let half = (SIZE / 2) as f32;
     let mut builder = IconBuilder::new(SIZE, SIZE);
@@ -22,8 +18,7 @@ fn swatch(shape: ShapeType, color: ColorName, hatch: HatchPatternType) -> String
         ShapeType::Diamond => builder.add_diamond(hatch, color.color(), half, 0.0, 0.0),
         ShapeType::Pentagon => builder.add_pentagon(hatch, color.color(), half, 0.0, 0.0),
     };
-    let unique = format!("pat_{shape:?}_{color:?}_{hatch:?}");
-    builder.to_svg().replace("pat0", &unique)
+    builder.to_svg()
 }
 
 /// One matrix: colors down, hatch patterns across, all in the given shape.
@@ -39,7 +34,9 @@ fn matrix(shape: ShapeType) {
     for color in ColorName::ALL {
         let hex = color.color().to_hex();
         println!("<tr>");
-        println!("<th class=\"color\"><span class=\"chip\" style=\"background:{hex}\"></span>{color:?} {hex}</th>");
+        println!(
+            "<th class=\"color\"><span class=\"chip\" style=\"background:{hex}\"></span>{color:?} {hex}</th>"
+        );
         for hatch in HatchPatternType::ALL {
             println!("<td>{}</td>", swatch(shape, color, hatch));
         }
@@ -57,10 +54,14 @@ fn main() {
     println!("th,td{{padding:4px;text-align:center;font-size:12px;font-weight:normal;}}");
     println!("th.color{{text-align:left;white-space:nowrap;}}");
     println!("th.hatch{{writing-mode:vertical-rl;transform:rotate(180deg);}}");
-    println!(".chip{{display:inline-block;width:12px;height:12px;vertical-align:middle;margin-right:4px;}}");
+    println!(
+        ".chip{{display:inline-block;width:12px;height:12px;vertical-align:middle;margin-right:4px;}}"
+    );
     println!("</style></head><body>");
     println!("<h1>Picturesque Marks Swatches</h1>");
-    println!("<p>One matrix per shape. Rows: palette colors. Columns: hatch patterns. Each swatch is {SIZE}px.</p>");
+    println!(
+        "<p>One matrix per shape. Rows: palette colors. Columns: hatch patterns. Each swatch is {SIZE}px.</p>"
+    );
 
     for shape in ShapeType::ALL {
         matrix(shape);

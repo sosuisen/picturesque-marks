@@ -22,7 +22,7 @@ pub use colors::{Color, ColorName};
 pub use geometry::{Geometry, GeometryType, ShapeType};
 pub use hatch_pattern::HatchPatternType;
 pub use icon_builder::{BackgroundColors, ForegroundStyle, IconBuilder};
-pub use underline::{UnderlineOptions, underline_colors, underline_svg};
+pub use underline::{underline_colors, underline_svg, UnderlineOptions};
 
 /// Maximum number of tags in a composed icon.
 /// Tiles go to the top-left, top-right, bottom-left and bottom-right.
@@ -119,11 +119,7 @@ fn compose_icons(
             let x = (i % 2) as i32 * tile_width;
             let y = (i / 2) as i32 * tile_height;
             let tile = build_icon(tag, tile_width, tile_height, None).to_svg();
-            // Duplicate pattern IDs in one document resolve to the first definition,
-            // so prefix the IDs with the tile index.
             nest_svg(&tile, x, y)
-                .replace(r#"id="pat"#, &format!(r#"id="t{i}pat"#))
-                .replace("url(#pat", &format!("url(#t{i}pat"))
         })
         .collect();
 
@@ -215,9 +211,7 @@ mod tests {
         let apple_tile = svg.find(r#"<svg x="0" y="0" "#).expect("top-left tile");
         let banana_tile = svg.find(r#"<svg x="50" y="0" "#).expect("top-right tile");
         assert!(apple_tile < banana_tile);
-        let apple_body = generate_ptag("apple", 50, 40)
-            .replace(r#"id="pat"#, r#"id="t0pat"#)
-            .replace("url(#pat", "url(#t0pat");
+        let apple_body = generate_ptag("apple", 50, 40);
         let apple_body = apple_body.split_once('>').map(|(_, rest)| rest).unwrap();
         assert!(svg[apple_tile..banana_tile].contains(apple_body));
     }
@@ -255,24 +249,23 @@ mod tests {
     }
 
     #[test]
-    fn composed_pattern_ids_do_not_collide() {
+    fn composed_pattern_ids_name_the_same_definition() {
+        // Tiles may repeat a pattern id. That is harmless only when every
+        // definition with the same id is the same text.
         let svg = generate_ptag_from_tags(&["abcdef", "ghijkl", "mnopqr", "stuvwx"], 200, 200);
-        let ids: Vec<&str> = svg
-            .match_indices("<pattern id=\"")
-            .map(|(pos, m)| {
-                let start = pos + m.len();
-                let end = svg[start..].find('"').unwrap() + start;
-                &svg[start..end]
-            })
-            .collect();
-        let mut unique = ids.clone();
-        unique.sort_unstable();
-        unique.dedup();
-        assert_eq!(ids.len(), unique.len());
-        // Element and attribute names must stay untouched.
-        assert!(!svg.contains("t0pattern"));
-        assert!(svg.contains("<pattern id=\"t0pat0\""));
-        // References must be rewritten to the same IDs.
-        assert!(svg.contains("url(#t0pat0)"));
+        let mut by_id: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+        for (pos, _) in svg.match_indices("<pattern id=\"") {
+            let end = svg[pos..].find("</pattern>").unwrap() + pos;
+            let def = &svg[pos..end];
+            let id = def.split('"').nth(1).unwrap();
+            assert!(id.starts_with("pat-"), "{id}");
+            if let Some(seen) = by_id.insert(id, def) {
+                assert_eq!(seen, def, "{id}");
+            }
+        }
+        assert!(!by_id.is_empty());
+        for id in by_id.keys() {
+            assert!(svg.contains(&format!("url(#{id})")));
+        }
     }
 }

@@ -129,7 +129,9 @@ impl BackgroundPlan {
         let color_index = index / GeometryType::COUNT;
         let geometry_index = index % GeometryType::COUNT;
         Some(SubShape {
-            color: ColorName::from_index(color_index).color().change_brightness(brightness),
+            color: ColorName::from_index(color_index)
+                .color()
+                .change_brightness(brightness),
             geometry: GeometryType::from_index(geometry_index),
         })
     }
@@ -289,11 +291,20 @@ impl IconBuilder {
     }
 
     /// Registers the pattern and returns the value for the shape's `fill` attribute.
+    ///
+    /// The pattern id is built from the hatch and the color, such as
+    /// `pat-Dots-F9A2A2`. Many icons are usually inlined in one HTML page, and
+    /// a browser resolves an id over the whole page. A counter like `pat0`
+    /// would make every icon show the first icon's pattern. An id made from
+    /// the content always names the same definition, so a duplicate is
+    /// harmless.
     fn register_fill(&mut self, hatch: HatchPatternType, color: Color) -> String {
-        let id = format!("pat{}", self.pattern_defs.len());
+        let id = format!("pat-{hatch:?}-{}", &color.to_hex()[1..]);
         match hatch.to_svg_pattern(&id, color) {
             Some(pattern) => {
-                self.pattern_defs.push(pattern);
+                if !self.pattern_defs.contains(&pattern) {
+                    self.pattern_defs.push(pattern);
+                }
                 format!("url(#{id})")
             }
             None => color.to_hex(),
@@ -679,6 +690,29 @@ mod tests {
         let b = crate::generate_ptag("apple", 100, 100);
         assert_eq!(a, b);
         assert!(a.starts_with(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="-50 -50 100 100">"#));
+    }
+
+    #[test]
+    fn pattern_id_names_hatch_and_color() {
+        let mut builder = IconBuilder::new(100, 100);
+        builder.add_circle(
+            HatchPatternType::Dots,
+            Color::rgb(0xF9, 0xA2, 0xA2),
+            50.0,
+            50.0,
+            50.0,
+        );
+        builder.add_circle(
+            HatchPatternType::Dots,
+            Color::rgb(0xF9, 0xA2, 0xA2),
+            20.0,
+            20.0,
+            20.0,
+        );
+        let svg = builder.to_svg();
+        assert!(svg.contains(r##"<pattern id="pat-Dots-F9A2A2""##));
+        assert_eq!(svg.matches("<pattern ").count(), 1);
+        assert_eq!(svg.matches("url(#pat-Dots-F9A2A2)").count(), 2);
     }
 
     #[test]
