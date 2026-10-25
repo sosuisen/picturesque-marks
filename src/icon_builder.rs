@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 use rand::{RngExt, SeedableRng};
 use rand_pcg::Pcg32;
-use sha1::{Digest, Sha1};
+use sha2::{Digest, Sha256};
 
 use crate::area::AreaName;
 use crate::colors::{Color, ColorName};
@@ -224,18 +224,19 @@ impl IconBuilder {
         blocks
     }
 
-    /// Returns the first 4 bytes of the SHA-1 hash of the string as a little-endian u32.
+    /// Returns the first 4 bytes of the SHA-256 hash of the string as a little-endian u32.
     ///
-    /// .NET's `GetHashCode` is not stable across environments, so it is not used.
+    /// A fixed hash keeps the icon the same on every machine. The underline
+    /// uses SHA-256 too, so the crate depends on one hash crate only.
     fn hash_u32(s: &str) -> u32 {
-        let digest = Sha1::digest(s.as_bytes());
+        let digest = Sha256::digest(s.as_bytes());
         u32::from_le_bytes([digest[0], digest[1], digest[2], digest[3]])
     }
 
-    /// Returns the first 8 bytes of the SHA-1 hash of the string as a little-endian u64.
+    /// Returns the first 8 bytes of the SHA-256 hash of the string as a little-endian u64.
     /// Used as the seed of the foreground random number generator.
     fn hash_u64(s: &str) -> u64 {
-        let digest = Sha1::digest(s.as_bytes());
+        let digest = Sha256::digest(s.as_bytes());
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(&digest[..8]);
         u64::from_le_bytes(bytes)
@@ -686,8 +687,8 @@ mod tests {
 
     #[test]
     fn hash_u32_reads_little_endian_prefix() {
-        // SHA-1("") = da39a3ee...
-        assert_eq!(IconBuilder::hash_u32(""), 0xEEA3_39DA);
+        // SHA-256("") = e3b0c442...
+        assert_eq!(IconBuilder::hash_u32(""), 0x42C4_B0E3);
     }
 
     #[test]
@@ -933,7 +934,7 @@ mod tests {
 
     #[test]
     fn hash_u64_reads_little_endian_prefix() {
-        // SHA-1("") = da39a3ee5e6b4b0d...
-        assert_eq!(IconBuilder::hash_u64(""), 0x0D4B_6B5E_EEA3_39DA);
+        // SHA-256("") = e3b0c44298fc1c14...
+        assert_eq!(IconBuilder::hash_u64(""), 0x141C_FC98_42C4_B0E3);
     }
 }
