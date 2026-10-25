@@ -29,7 +29,13 @@ impl Color {
     }
 
     /// Returns the color with its lightness multiplied by `brightness_factor`.
+    /// A factor of exactly 1.0 returns the color unchanged.
     pub fn change_brightness(self, brightness_factor: f64) -> Self {
+        // The HSL round trip truncates and may shift a channel by one. A
+        // factor of 1.0 must not alter the color, so skip the round trip.
+        if brightness_factor == 1.0 {
+            return self;
+        }
         let (hue, saturation, brightness) = self.to_hsl();
         let brightness = (brightness * brightness_factor).clamp(0.0, 1.0);
         Self::from_hsl(hue, saturation, brightness)
@@ -147,13 +153,11 @@ mod tests {
     }
 
     #[test]
-    fn change_brightness_with_factor_one_keeps_color_close() {
-        let original = ColorName::Blue.color();
-        let same = original.change_brightness(1.0);
-        // Truncation may shift a channel by one.
-        assert!((same.r as i32 - original.r as i32).abs() <= 1);
-        assert!((same.g as i32 - original.g as i32).abs() <= 1);
-        assert!((same.b as i32 - original.b as i32).abs() <= 1);
+    fn change_brightness_with_factor_one_keeps_color() {
+        for name in ColorName::ALL {
+            let original = name.color();
+            assert_eq!(original.change_brightness(1.0), original);
+        }
     }
 
     #[test]

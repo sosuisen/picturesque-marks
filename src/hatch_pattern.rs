@@ -2,9 +2,6 @@
 
 use crate::colors::Color;
 
-/// Lightness factor applied to the color of the `Dots` pattern. See ADR-002.
-const DOTS_BRIGHTNESS: f64 = 0.8;
-
 /// Kind of hatch pattern. `Fill` means a solid fill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HatchPatternType {
@@ -43,16 +40,23 @@ impl HatchPatternType {
         Self::ALL[(index % Self::COUNT) as usize]
     }
 
+    /// Lightness factor applied to the color before the pattern is drawn.
+    ///
+    /// Small dots cover little area, so the palette color looks washed out.
+    /// `Dots` is darkened to keep it visible. See ADR-002. Every other
+    /// pattern keeps the color as it is.
+    pub fn brightness(self) -> f64 {
+        match self {
+            HatchPatternType::Dots => 0.8,
+            _ => 1.0,
+        }
+    }
+
     /// Returns the `<pattern>` element as an SVG string. Returns `None` for `Fill`.
     ///
     /// `id` must be unique within the document.
     pub fn to_svg_pattern(self, id: &str, color: Color) -> Option<String> {
-        // Small dots cover little area, so the palette color looks washed out.
-        // Darken it to keep the dots visible.
-        let color = match self {
-            HatchPatternType::Dots => color.change_brightness(DOTS_BRIGHTNESS),
-            _ => color,
-        };
+        let color = color.change_brightness(self.brightness());
         let hex = color.to_hex();
         let line = |x1: i32, y1: i32, x2: i32, y2: i32, width: i32| {
             format!(

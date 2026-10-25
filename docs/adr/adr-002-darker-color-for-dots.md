@@ -14,7 +14,7 @@ Accepted
 
 ## Decision
 
-Dots パターンのときだけ、色の明度を0.8倍にする。`HatchPatternType::to_svg_pattern` の中で、Dots の場合に `Color::change_brightness(0.8)` を適用してから点を描く。係数は定数 `DOTS_BRIGHTNESS` として `src/hatch_pattern.rs` に置く。
+Dots パターンのときだけ、色の明度を0.8倍にする。各パターンは `HatchPatternType::brightness` で自分の明度係数を返し、Dots は0.8、他は1.0である。`to_svg_pattern` はパターンの種類で分岐せず、この係数を `Color::change_brightness` に一律に渡してから描く。係数1.0は色を変えない。
 
 例えば Red は #F9A2A2 から #F45454 になる（ADR 005 の値）。色相と彩度は変えないので、どのパレット色かは見分けられる。
 
