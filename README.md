@@ -153,6 +153,37 @@ With `spikes`, the bezier stops at 78% to 86% of the width, three to five sharp 
 and a straight run brings the line to its end. Spike tips stay inside the viewBox.
 Coordinates are rounded to one decimal and written the way JavaScript prints numbers.
 
+## Changes from 0.2.0
+
+Version 0.3.0 renames most of the API. With `Color::BLACK` as the signature color,
+the SVG output is the same as 0.2.0 for the same inputs.
+
+The three kinds of SVG are now named after what they draw:
+
+| 0.3.0 | 0.2.0 |
+|---|---|
+| `signature_svg(signature, style, color, w, h)` | none; the signature could not be drawn alone |
+| `background_svg(tags, layout, w, h)` | `generate_ptag`, `generate_ptag_from_tags`, `compose_ptag` |
+| `icon_svg(tags, layout, signature, style, color, w, h)` | `generate_icon`, `generate_icon_from_tags`, `compose_icon` |
+| `background_colors(tag)` | `IconBuilder::background_colors(tag)` |
+| `underline_svg`, `underline_colors` | unchanged |
+
+Breaking changes:
+
+- Every function that returns an SVG string ends in `_svg`. Tags are always a slice, so one tag is `&["apple"]`.
+  The layout is always given; pass `ComposeLayout::default()` for `Overlay`.
+- `ForegroundStyle` is now `SignatureStyle`. It has a new style, `Blob`: the `Face` outline filled, with no stroke and no eyes.
+- The signature takes a `Color`. It is the stroke of the curve and the eyes, or the fill of `Blob`.
+  `signature_svg`, `icon_svg`, `IconBuilder::add_signature` and `IconBuilder::add_default_icon` take it. Use `Color::BLACK` for the old look.
+- `IconBuilder` methods: `generate_bg_from_text` is `add_background_from_tag`, `add_foreground` is `add_signature`,
+  `default_background` is `add_default_background`, `default_icon` is `add_default_icon`.
+- `Color::change_brightness` is `Color::with_brightness`. `Geometry::generate_from_hash` is `Geometry::from_hash`.
+
+Added:
+
+- `Color::BLACK`.
+- Command line: `--style blob`, `--color HEX` for the signature color, and the `signature` subcommand that draws the signature alone.
+
 ## Differences from the original C# picturesque-tags
 
 - The signature mark is generated from the signature with a seeded PCG32 generator. The original used a non-deterministic random generator.

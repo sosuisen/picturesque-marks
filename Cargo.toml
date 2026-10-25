@@ -1,6 +1,6 @@
 [package]
 name = "picturesque-marks"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Generate SVG icons from tag strings and sketchy underlines from seeds."
 license = "MIT"
