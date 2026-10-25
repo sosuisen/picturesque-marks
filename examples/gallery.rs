@@ -84,7 +84,7 @@ const SIGNED: &[(&str, SignatureStyle, &[&str])] = &[
 
 fn figure(svg: &str, caption: &str) {
     println!(
-        "<figure style=\"margin:4px;\">{svg}<figcaption style=\"text-align:center;\">{caption}</figcaption></figure>"
+        "<figure style=\"margin:4px;padding:8px;border:1px solid #ddd;border-radius:4px;\">{svg}<figcaption style=\"text-align:center;\">{caption}</figcaption></figure>"
     );
 }
 
