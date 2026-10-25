@@ -1,12 +1,14 @@
 //! Color palette and brightness adjustment.
 //!
-//! The palette is six hues 60 degrees apart, all with the same saturation and
-//! lightness. They form two triads that are offset by 60 degrees.
-//! Yellow alone sits at 46 instead of 60. A 60-degree yellow has a lot of green
-//! and looks too bright to the eye. Pulling it toward orange makes it easier
-//! to see. See ADR-001.
-//! triad01: #EB9B9B (0), #9BEB9B (120), #9B9BEB (240)
-//! triad02: #EBD89B (46), #9BEBEB (180), #EB9BEB (300)
+//! The palette is a hexad: six hues 60 degrees apart in HSL, at 0, 60, 120,
+//! 180, 240 and 300 degrees. See ADR-001 and ADR-004.
+//!
+//! The six colors share the same perceptual lightness and chroma. Each color
+//! has OKLCH lightness 0.80 and chroma 0.104. The chroma is the largest that
+//! sRGB can show for every hue at that lightness; blue is the limit. See
+//! ADR-003 and ADR-005.
+//! red #F9A2A2 (0), yellow #C3C372 (60), green #94D094 (120),
+//! cyan #5FD3D3 (180), blue #B5B5FF (240), magenta #E1A6E1 (300)
 
 /// RGB color. Alpha is not handled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -125,12 +127,12 @@ impl ColorName {
 
     pub fn color(self) -> Color {
         match self {
-            ColorName::Red => Color::rgb(0xEB, 0x9B, 0x9B),
-            ColorName::Blue => Color::rgb(0x9B, 0x9B, 0xEB),
-            ColorName::Green => Color::rgb(0x9B, 0xEB, 0x9B),
-            ColorName::Magenta => Color::rgb(0xEB, 0x9B, 0xEB),
-            ColorName::Cyan => Color::rgb(0x9B, 0xEB, 0xEB),
-            ColorName::Yellow => Color::rgb(0xEB, 0xD8, 0x9B),
+            ColorName::Red => Color::rgb(0xF9, 0xA2, 0xA2),
+            ColorName::Blue => Color::rgb(0xB5, 0xB5, 0xFF),
+            ColorName::Green => Color::rgb(0x94, 0xD0, 0x94),
+            ColorName::Magenta => Color::rgb(0xE1, 0xA6, 0xE1),
+            ColorName::Cyan => Color::rgb(0x5F, 0xD3, 0xD3),
+            ColorName::Yellow => Color::rgb(0xC3, 0xC3, 0x72),
         }
     }
 }
@@ -141,7 +143,7 @@ mod tests {
 
     #[test]
     fn to_hex_is_uppercase_with_hash() {
-        assert_eq!(ColorName::Red.color().to_hex(), "#EB9B9B");
+        assert_eq!(ColorName::Red.color().to_hex(), "#F9A2A2");
     }
 
     #[test]
