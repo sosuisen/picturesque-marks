@@ -1,13 +1,15 @@
 //! Generates an SVG from the command line and writes it to stdout.
 //!
 //! Usage:
-//! - `picturesque-marks [--size W[xH]] [--signature TEXT] [--style crossing|no-crossing|face] [--layout grid|overlay] [TAG...]`
+//! - `picturesque-marks [--size W[xH]] [--signature TEXT] [--style crossing|no-crossing|face|blob] [--color HEX] [--layout grid|overlay] [TAG...]`
+//! - `picturesque-marks signature [--size W[xH]] [--style STYLE] [--color HEX] TEXT`
 //! - `picturesque-marks underline [--spikes] [--class NAME] [--stroke-width W] SEED [TAG...]`
 
 use std::process::ExitCode;
 
 use picturesque_marks::{
-    compose_icon, compose_ptag, underline_svg, ComposeLayout, ForegroundStyle, UnderlineOptions,
+    Color, ComposeLayout, SignatureStyle, UnderlineOptions, background_svg, icon_svg,
+    signature_svg, underline_svg,
 };
 
 fn main() -> ExitCode {
@@ -15,6 +17,10 @@ fn main() -> ExitCode {
     if args.peek().is_some_and(|arg| arg == "underline") {
         args.next();
         return underline_main(args);
+    }
+    if args.peek().is_some_and(|arg| arg == "signature") {
+        args.next();
+        return signature_main(args);
     }
     icon_main(args)
 }
@@ -24,7 +30,7 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
     let mut width = 100;
     let mut height = 100;
     let mut signature: Option<String> = None;
-    let mut style = ForegroundStyle::default();
+    let mut style = StyleArg::default();
     let mut layout = ComposeLayout::default();
 
     while let Some(arg) = args.next() {
@@ -47,16 +53,25 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
                     print_usage();
                     return ExitCode::FAILURE;
                 };
-                style = match value.as_str() {
-                    "crossing" => ForegroundStyle::Crossing,
-                    "no-crossing" => ForegroundStyle::NoCrossing,
-                    "face" => ForegroundStyle::Face,
-                    _ => {
-                        eprintln!("style must be crossing, no-crossing or face: {value}");
-                        print_usage();
-                        return ExitCode::FAILURE;
-                    }
+                let Some(parsed) = style.parse_name(&value) else {
+                    eprintln!("style must be crossing, no-crossing, face or blob: {value}");
+                    print_usage();
+                    return ExitCode::FAILURE;
                 };
+                style = parsed;
+            }
+            "--color" | "-c" => {
+                let Some(value) = args.next() else {
+                    eprintln!("--color requires a value");
+                    print_usage();
+                    return ExitCode::FAILURE;
+                };
+                let Some(color) = parse_color(&value) else {
+                    eprintln!("color must be RRGGBB or #RRGGBB: {value}");
+                    print_usage();
+                    return ExitCode::FAILURE;
+                };
+                style.color = color;
             }
             "--layout" | "-l" => {
                 let Some(value) = args.next() else {
@@ -102,11 +117,153 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
     }
 
     let svg = match signature {
-        Some(signature) => compose_icon(&tags, layout, &signature, style, width, height),
-        None => compose_ptag(&tags, layout, width, height),
+        Some(signature) => icon_svg(
+            &tags,
+            layout,
+            &signature,
+            style.style(),
+            style.color,
+            width,
+            height,
+        ),
+        None => background_svg(&tags, layout, width, height),
     };
     println!("{svg}");
     ExitCode::SUCCESS
+}
+
+fn signature_main(mut args: impl Iterator<Item = String>) -> ExitCode {
+    let mut text: Option<String> = None;
+    let mut width = 100;
+    let mut height = 100;
+    let mut style = StyleArg::default();
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                print_signature_usage();
+                return ExitCode::SUCCESS;
+            }
+            "--style" | "-t" => {
+                let Some(value) = args.next() else {
+                    eprintln!("--style requires a value");
+                    print_signature_usage();
+                    return ExitCode::FAILURE;
+                };
+                let Some(parsed) = style.parse_name(&value) else {
+                    eprintln!("style must be crossing, no-crossing, face or blob: {value}");
+                    print_signature_usage();
+                    return ExitCode::FAILURE;
+                };
+                style = parsed;
+            }
+            "--color" | "-c" => {
+                let Some(value) = args.next() else {
+                    eprintln!("--color requires a value");
+                    print_signature_usage();
+                    return ExitCode::FAILURE;
+                };
+                let Some(color) = parse_color(&value) else {
+                    eprintln!("color must be RRGGBB or #RRGGBB: {value}");
+                    print_signature_usage();
+                    return ExitCode::FAILURE;
+                };
+                style.color = color;
+            }
+            "--size" | "-s" => {
+                let Some(value) = args.next() else {
+                    eprintln!("--size requires a value");
+                    print_signature_usage();
+                    return ExitCode::FAILURE;
+                };
+                match parse_size(&value) {
+                    Some((w, h)) => {
+                        width = w;
+                        height = h;
+                    }
+                    None => {
+                        eprintln!("size must be W or WxH with positive integers: {value}");
+                        print_signature_usage();
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            _ if text.is_none() => text = Some(arg),
+            _ => {
+                eprintln!("only one signature text is allowed: {arg}");
+                print_signature_usage();
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    let Some(text) = text else {
+        eprintln!("a signature text is required");
+        print_signature_usage();
+        return ExitCode::FAILURE;
+    };
+    println!(
+        "{}",
+        signature_svg(&text, style.style(), style.color, width, height)
+    );
+    ExitCode::SUCCESS
+}
+
+/// The `--style` name and the `--color`, parsed in any order.
+#[derive(Debug, Clone, Copy)]
+struct StyleArg {
+    name: StyleName,
+    color: Color,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+enum StyleName {
+    #[default]
+    Crossing,
+    NoCrossing,
+    Face,
+    Blob,
+}
+
+impl Default for StyleArg {
+    fn default() -> Self {
+        Self {
+            name: StyleName::default(),
+            color: Color::BLACK,
+        }
+    }
+}
+
+impl StyleArg {
+    fn parse_name(self, value: &str) -> Option<Self> {
+        let name = match value {
+            "crossing" => StyleName::Crossing,
+            "no-crossing" => StyleName::NoCrossing,
+            "face" => StyleName::Face,
+            "blob" => StyleName::Blob,
+            _ => return None,
+        };
+        Some(Self { name, ..self })
+    }
+
+    fn style(self) -> SignatureStyle {
+        match self.name {
+            StyleName::Crossing => SignatureStyle::Crossing,
+            StyleName::NoCrossing => SignatureStyle::NoCrossing,
+            StyleName::Face => SignatureStyle::Face,
+            StyleName::Blob => SignatureStyle::Blob,
+        }
+    }
+}
+
+/// Parses `RRGGBB` or `#RRGGBB`.
+fn parse_color(value: &str) -> Option<Color> {
+    let hex = value.strip_prefix('#').unwrap_or(value);
+    if hex.len() != 6 {
+        return None;
+    }
+    let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some(Color::rgb(channel(0)?, channel(2)?, channel(4)?))
 }
 
 fn underline_main(mut args: impl Iterator<Item = String>) -> ExitCode {
@@ -173,21 +330,40 @@ fn parse_size(value: &str) -> Option<(i32, i32)> {
 
 fn print_usage() {
     eprintln!(
-        "usage: picturesque-marks [--size W[xH]] [--signature TEXT] [--style STYLE] [--layout LAYOUT] [TAG...]"
+        "usage: picturesque-marks [--size W[xH]] [--signature TEXT] [--style STYLE] [--color HEX] [--layout LAYOUT] [TAG...]"
     );
+    eprintln!("       picturesque-marks signature [OPTIONS] TEXT");
     eprintln!("       picturesque-marks underline [OPTIONS] SEED");
     eprintln!("  TAG                  tag string the background is generated from (default: A)");
     eprintln!(
         "                       up to four tags are composed into one icon, in the given order"
     );
     eprintln!("  --size, -s W[xH]     icon width and height (default: 100)");
-    eprintln!("  --signature, -g TEXT draw a hand-drawn style curve generated from TEXT on top");
-    eprintln!("  --style, -t STYLE    curve style: crossing (default), no-crossing or face");
+    eprintln!("  --signature, -g TEXT draw the signature mark generated from TEXT on top");
+    eprintln!(
+        "  --style, -t STYLE    signature style: crossing (default), no-crossing, face or blob"
+    );
+    eprintln!(
+        "  --color, -c HEX      signature color as RRGGBB: the stroke, or the fill of blob (default: 000000)"
+    );
     eprintln!("  --layout, -l LAYOUT  how several tags are composed (default: overlay)");
     eprintln!("                       grid: a 2x2 grid of tiles in the given order");
     eprintln!("                       overlay: the first tag at full size, the others as");
     eprintln!("                       half-transparent tiles over it");
+    eprintln!("  signature            draw the signature mark alone; see `signature --help`");
     eprintln!("  underline            draw a sketchy underline instead; see `underline --help`");
+}
+
+fn print_signature_usage() {
+    eprintln!(
+        "usage: picturesque-marks signature [--size W[xH]] [--style STYLE] [--color HEX] TEXT"
+    );
+    eprintln!("  TEXT                 string the signature mark is generated from");
+    eprintln!("  --size, -s W[xH]     width and height (default: 100)");
+    eprintln!("  --style, -t STYLE    crossing (default), no-crossing, face or blob");
+    eprintln!(
+        "  --color, -c HEX      signature color as RRGGBB: the stroke, or the fill of blob (default: 000000)"
+    );
 }
 
 fn print_underline_usage() {

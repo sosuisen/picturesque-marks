@@ -19,6 +19,9 @@ pub struct Color {
 }
 
 impl Color {
+    /// Black, the usual color of a signature.
+    pub const BLACK: Color = Color::rgb(0, 0, 0);
+
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
     }
@@ -30,7 +33,7 @@ impl Color {
 
     /// Returns the color with its lightness multiplied by `brightness_factor`.
     /// A factor of exactly 1.0 returns the color unchanged.
-    pub fn change_brightness(self, brightness_factor: f64) -> Self {
+    pub fn with_brightness(self, brightness_factor: f64) -> Self {
         // The HSL round trip truncates and may shift a channel by one. A
         // factor of 1.0 must not alter the color, so skip the round trip.
         if brightness_factor == 1.0 {
@@ -239,18 +242,18 @@ mod tests {
     }
 
     #[test]
-    fn change_brightness_with_factor_one_keeps_color() {
+    fn with_brightness_with_factor_one_keeps_color() {
         for name in ColorName::ALL {
             let original = name.color();
-            assert_eq!(original.change_brightness(1.0), original);
+            assert_eq!(original.with_brightness(1.0), original);
         }
     }
 
     #[test]
-    fn change_brightness_darkens_and_lightens() {
+    fn with_brightness_darkens_and_lightens() {
         let original = ColorName::Green.color();
-        let darker = original.change_brightness(0.9);
-        let lighter = original.change_brightness(1.1);
+        let darker = original.with_brightness(0.9);
+        let lighter = original.with_brightness(1.1);
         assert!(darker.g < original.g);
         assert!(lighter.r > original.r);
     }

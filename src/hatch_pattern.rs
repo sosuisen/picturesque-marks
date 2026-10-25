@@ -56,7 +56,7 @@ impl HatchPatternType {
     ///
     /// `id` must be unique within the document.
     pub fn to_svg_pattern(self, id: &str, color: Color) -> Option<String> {
-        let color = color.change_brightness(self.brightness());
+        let color = color.with_brightness(self.brightness());
         let hex = color.to_hex();
         let line = |x1: i32, y1: i32, x2: i32, y2: i32, width: i32| {
             format!(

@@ -2,12 +2,12 @@
 //! underlines from seed strings, deterministically.
 //!
 //! Successor of the `picturesque-tags` crate, a Rust port of
-//! <https://github.com/sosuisen/picturesque-tags>. Every item of that crate
-//! is here under the same name, so it is a drop-in replacement.
+//! <https://github.com/sosuisen/picturesque-tags>. The API is renamed:
+//! every function that returns an SVG string ends in `_svg`.
 //!
-//! The icon background is generated from the tag. The foreground curve is
+//! The icon background is generated from the tags. The signature mark is
 //! generated from a separate string called the signature, which stands for
-//! the owner's handwritten sign. The underline is generated from a seed and
+//! the owner's handwritten sign. An icon is the two laid over each other. The underline is generated from a seed and
 //! takes its colors from an icon. The same inputs always give the same SVG.
 
 pub mod area;
@@ -21,8 +21,8 @@ pub use area::AreaName;
 pub use colors::{Color, ColorName};
 pub use geometry::{Geometry, GeometryType, ShapeType};
 pub use hatch_pattern::HatchPatternType;
-pub use icon_builder::{BackgroundColors, ForegroundStyle, IconBuilder};
-pub use underline::{underline_colors, underline_svg, UnderlineOptions};
+pub use icon_builder::{BackgroundColors, IconBuilder, SignatureStyle, background_colors};
+pub use underline::{UnderlineOptions, underline_colors, underline_svg};
 
 /// Maximum number of tags in a composed icon.
 /// Tiles go to the top-left, top-right, bottom-left and bottom-right.
@@ -48,114 +48,84 @@ pub enum ComposeLayout {
 /// Opacity of the tiles laid over the first tag in [`ComposeLayout::Overlay`].
 const OVERLAY_OPACITY: f64 = 0.5;
 
-/// Signature and curve style for the foreground.
+/// The signature string and how to draw it.
 #[derive(Debug, Clone, Copy)]
-struct Foreground<'a> {
-    signature: &'a str,
-    style: ForegroundStyle,
+struct Signature<'a> {
+    text: &'a str,
+    style: SignatureStyle,
+    color: Color,
 }
 
-/// Generates an SVG icon with the background only.
+/// Generates the SVG of the signature alone: the mark drawn from
+/// `signature` in the `style` and `color`, with no background.
 ///
-/// Equivalent to `Program.GeneratePtag` in the original. No foreground curve.
-pub fn generate_ptag(tag: &str, width: i32, height: i32) -> String {
-    build_icon(tag, width, height, None).to_svg()
-}
-
-/// Generates an SVG icon with the background from `tag` and the foreground curve
-/// from `signature`, drawn in the given `style`.
-///
-/// Equivalent to `Generator.GenerateIcon(int, int, string)` in the original,
-/// except that the curve is deterministic.
-pub fn generate_icon(
-    tag: &str,
+/// The color is the stroke of the curve and the eyes, or the fill of
+/// `SignatureStyle::Blob`. `Color::BLACK` is the usual choice.
+pub fn signature_svg(
     signature: &str,
-    style: ForegroundStyle,
+    style: SignatureStyle,
+    color: Color,
     width: i32,
     height: i32,
 ) -> String {
-    build_icon(tag, width, height, Some(Foreground { signature, style })).to_svg()
+    let mut builder = IconBuilder::new(width, height);
+    builder.add_signature(signature, style, color);
+    builder.to_svg()
 }
 
-/// Generates an SVG icon with the foreground curve from a list of tags,
-/// composed in the default layout, [`ComposeLayout::Overlay`].
+/// Generates the SVG of the background alone: the shapes drawn from the tags.
 ///
-/// Same as [`compose_icon`] with `ComposeLayout::default()`.
-pub fn generate_icon_from_tags(
+/// - No tags: the default gray circle.
+/// - One tag: the shapes of that tag.
+/// - Two or more tags: up to [`MAX_COMPOSED_TAGS`] in the given order,
+///   composed in the `layout`. The order is kept because the caller puts
+///   the main tag first.
+pub fn background_svg(
     tags: &[impl AsRef<str>],
-    signature: &str,
-    style: ForegroundStyle,
+    layout: ComposeLayout,
     width: i32,
     height: i32,
 ) -> String {
-    compose_icon(
-        tags,
-        ComposeLayout::default(),
-        signature,
-        style,
-        width,
-        height,
-    )
+    from_tags(tags, layout, width, height, None)
 }
 
-/// Generates an SVG icon with the background only from a list of tags,
-/// composed in the default layout, [`ComposeLayout::Overlay`].
-///
-/// Same as [`compose_ptag`] with `ComposeLayout::default()`.
-pub fn generate_ptag_from_tags(tags: &[impl AsRef<str>], width: i32, height: i32) -> String {
-    compose_ptag(tags, ComposeLayout::default(), width, height)
-}
-
-/// Generates an SVG icon with the foreground curve from a list of tags.
-///
-/// - No tags: returns the default icon.
-/// - One tag: returns the icon for that tag.
-/// - Two or more tags: takes up to [`MAX_COMPOSED_TAGS`] in the given order
-///   and composes them into one icon in the `layout`.
-///   The order is kept because the caller puts the main tag first.
-///   The signature curve is drawn once, large, over the whole composed icon.
-pub fn compose_icon(
+/// Generates the SVG of an icon: the background of [`background_svg`] with
+/// the signature of [`signature_svg`] drawn once, large, over the whole icon.
+pub fn icon_svg(
     tags: &[impl AsRef<str>],
     layout: ComposeLayout,
     signature: &str,
-    style: ForegroundStyle,
+    style: SignatureStyle,
+    color: Color,
     width: i32,
     height: i32,
 ) -> String {
-    generate_from_tags(
+    from_tags(
         tags,
         layout,
         width,
         height,
-        Some(Foreground { signature, style }),
+        Some(Signature {
+            text: signature,
+            style,
+            color,
+        }),
     )
 }
 
-/// Generates an SVG icon with the background only from a list of tags.
-///
-/// Behaves like [`compose_icon`] with respect to the number of tags.
-pub fn compose_ptag(
+fn from_tags(
     tags: &[impl AsRef<str>],
     layout: ComposeLayout,
     width: i32,
     height: i32,
-) -> String {
-    generate_from_tags(tags, layout, width, height, None)
-}
-
-fn generate_from_tags(
-    tags: &[impl AsRef<str>],
-    layout: ComposeLayout,
-    width: i32,
-    height: i32,
-    foreground: Option<Foreground<'_>>,
+    signature: Option<Signature<'_>>,
 ) -> String {
     match tags {
-        [] => build_icon("", width, height, foreground).to_svg(),
-        [tag] => build_icon(tag.as_ref(), width, height, foreground).to_svg(),
+        [] => build_icon("", width, height, signature).to_svg(),
+        [tag] => build_icon(tag.as_ref(), width, height, signature).to_svg(),
         _ => match layout {
-            ComposeLayout::Grid => compose_grid(tags, width, height, foreground),
-            ComposeLayout::Overlay => compose_overlay(tags, width, height, foreground),
+            ComposeLayout::Grid => compose_grid(tags, width, height, signature),
+            ComposeLayout::Overlay => compose_overlay(tags, width, height, signature),
         },
     }
 }
@@ -170,7 +140,7 @@ fn compose_grid(
     tags: &[impl AsRef<str>],
     width: i32,
     height: i32,
-    foreground: Option<Foreground<'_>>,
+    signature: Option<Signature<'_>>,
 ) -> String {
     let tile_width = width / 2;
     let tile_height = height / 2;
@@ -188,9 +158,9 @@ fn compose_grid(
         })
         .collect();
 
-    if let Some(fg) = foreground {
+    if let Some(sig) = signature {
         let mut layer = IconBuilder::new(width, height);
-        layer.add_foreground(fg.signature, fg.style);
+        layer.add_signature(sig.text, sig.style, sig.color);
         layers.push(nest_svg(&layer.to_svg(), 0, 0));
     }
 
@@ -211,7 +181,7 @@ fn compose_overlay(
     tags: &[impl AsRef<str>],
     width: i32,
     height: i32,
-    foreground: Option<Foreground<'_>>,
+    signature: Option<Signature<'_>>,
 ) -> String {
     let tile_width = width / 2;
     let tile_height = height / 2;
@@ -240,9 +210,9 @@ fn compose_overlay(
         layers.push(format!(r#"<g opacity="{OVERLAY_OPACITY}">{tile}</g>"#));
     }
 
-    if let Some(fg) = foreground {
+    if let Some(sig) = signature {
         let mut layer = IconBuilder::new(width, height);
-        layer.add_foreground(fg.signature, fg.style);
+        layer.add_signature(sig.text, sig.style, sig.color);
         layers.push(nest_svg(&layer.to_svg(), 0, 0));
     }
 
@@ -257,16 +227,11 @@ fn nest_svg(svg: &str, x: i32, y: i32) -> String {
     svg.replacen("<svg ", &format!(r#"<svg x="{x}" y="{y}" "#), 1)
 }
 
-fn build_icon(
-    tag: &str,
-    width: i32,
-    height: i32,
-    foreground: Option<Foreground<'_>>,
-) -> IconBuilder {
+fn build_icon(tag: &str, width: i32, height: i32, signature: Option<Signature<'_>>) -> IconBuilder {
     let mut builder = IconBuilder::new(width, height);
-    builder.generate_bg_from_text(tag);
-    if let Some(fg) = foreground {
-        builder.add_foreground(fg.signature, fg.style);
+    builder.add_background_from_tag(tag);
+    if let Some(sig) = signature {
+        builder.add_signature(sig.text, sig.style, sig.color);
     }
     builder
 }
@@ -276,20 +241,11 @@ mod tests {
     use super::*;
 
     const SIGN: &str = "Hidekazu";
-    const STYLE: ForegroundStyle = ForegroundStyle::Crossing;
+    const STYLE: SignatureStyle = SignatureStyle::Crossing;
 
     #[test]
-    fn from_tags_functions_use_the_default_layout() {
-        let tags = ["apple", "banana", "cherry"];
+    fn default_layout_is_overlay() {
         assert_eq!(ComposeLayout::default(), ComposeLayout::Overlay);
-        assert_eq!(
-            generate_ptag_from_tags(&tags, 100, 100),
-            compose_ptag(&tags, ComposeLayout::Overlay, 100, 100)
-        );
-        assert_eq!(
-            generate_icon_from_tags(&tags, SIGN, STYLE, 100, 100),
-            compose_icon(&tags, ComposeLayout::Overlay, SIGN, STYLE, 100, 100)
-        );
     }
 
     /// Positions of the nested `<svg>` tiles, in document order.
@@ -306,8 +262,8 @@ mod tests {
 
     #[test]
     fn overlay_puts_the_first_tag_at_full_size() {
-        let svg = compose_ptag(&["apple", "banana"], ComposeLayout::Overlay, 100, 80);
-        let first = generate_ptag("apple", 100, 80);
+        let svg = background_svg(&["apple", "banana"], ComposeLayout::Overlay, 100, 80);
+        let first = background_svg(&["apple"], ComposeLayout::default(), 100, 80);
         let first_body = first.split_once('>').map(|(_, rest)| rest).unwrap();
         assert!(svg.contains(
             r#"<svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="100" height="80""#
@@ -317,27 +273,28 @@ mod tests {
 
     #[test]
     fn overlay_places_the_other_tags_by_their_count() {
-        let two = compose_ptag(&["a", "b"], ComposeLayout::Overlay, 100, 80);
+        let two = background_svg(&["a", "b"], ComposeLayout::Overlay, 100, 80);
         assert_eq!(tile_positions(&two), vec![(0, 0), (50, 40)]);
-        let three = compose_ptag(&["a", "b", "c"], ComposeLayout::Overlay, 100, 80);
+        let three = background_svg(&["a", "b", "c"], ComposeLayout::Overlay, 100, 80);
         assert_eq!(tile_positions(&three), vec![(0, 0), (50, 0), (0, 40)]);
-        let four = compose_ptag(&["a", "b", "c", "d"], ComposeLayout::Overlay, 100, 80);
+        let four = background_svg(&["a", "b", "c", "d"], ComposeLayout::Overlay, 100, 80);
         assert_eq!(
             tile_positions(&four),
             vec![(0, 0), (50, 0), (0, 40), (50, 40)]
         );
         // The fifth tag is dropped, as in the grid.
-        let five = compose_ptag(&["a", "b", "c", "d", "e"], ComposeLayout::Overlay, 100, 80);
+        let five = background_svg(&["a", "b", "c", "d", "e"], ComposeLayout::Overlay, 100, 80);
         assert_eq!(four, five);
     }
 
     #[test]
     fn overlay_tiles_are_half_transparent_and_the_curve_is_not() {
-        let svg = compose_icon(
+        let svg = icon_svg(
             &["a", "b", "c"],
             ComposeLayout::Overlay,
             SIGN,
             STYLE,
+            Color::BLACK,
             100,
             100,
         );
@@ -349,24 +306,80 @@ mod tests {
     }
 
     #[test]
-    fn single_tag_is_same_as_generate_ptag() {
-        let from_tags = generate_ptag_from_tags(&["apple"], 100, 100);
-        let direct = generate_ptag("apple", 100, 100);
-        assert_eq!(from_tags, direct);
+    fn blob_matches_the_face_outline() {
+        let cyan = Color::rgb(0x5F, 0xD3, 0xD3);
+        let filled = signature_svg(SIGN, SignatureStyle::Blob, cyan, 100, 100);
+        let face = signature_svg(SIGN, SignatureStyle::Face, Color::BLACK, 100, 100);
+        let path_d = |svg: &str| {
+            svg.split("d=\"")
+                .nth(1)
+                .unwrap()
+                .split('"')
+                .next()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(path_d(&filled), path_d(&face));
+        assert!(filled.contains(r##"fill="#5FD3D3"/>"##));
+        assert!(!filled.contains("<line "));
+        assert_eq!(
+            filled,
+            signature_svg(SIGN, SignatureStyle::Blob, cyan, 100, 100)
+        );
     }
 
     #[test]
-    fn generate_icon_is_deterministic() {
-        let a = generate_icon("apple", SIGN, STYLE, 100, 100);
-        let b = generate_icon("apple", SIGN, STYLE, 100, 100);
+    fn single_tag_is_same_as_the_builder() {
+        let from_tags = background_svg(&["apple"], ComposeLayout::default(), 100, 100);
+        let mut builder = IconBuilder::new(100, 100);
+        builder.add_background_from_tag("apple");
+        assert_eq!(from_tags, builder.to_svg());
+    }
+
+    #[test]
+    fn icon_svg_is_deterministic() {
+        let a = icon_svg(
+            &["apple"],
+            ComposeLayout::default(),
+            SIGN,
+            STYLE,
+            Color::BLACK,
+            100,
+            100,
+        );
+        let b = icon_svg(
+            &["apple"],
+            ComposeLayout::default(),
+            SIGN,
+            STYLE,
+            Color::BLACK,
+            100,
+            100,
+        );
         assert_eq!(a, b);
         assert!(a.contains("<path d=\"M "));
     }
 
     #[test]
     fn signature_changes_only_the_curve() {
-        let a = generate_icon("apple", "alice", STYLE, 100, 100);
-        let b = generate_icon("apple", "bob", STYLE, 100, 100);
+        let a = icon_svg(
+            &["apple"],
+            ComposeLayout::default(),
+            "alice",
+            STYLE,
+            Color::BLACK,
+            100,
+            100,
+        );
+        let b = icon_svg(
+            &["apple"],
+            ComposeLayout::default(),
+            "bob",
+            STYLE,
+            Color::BLACK,
+            100,
+            100,
+        );
         let background = |svg: &str| svg.split("<path ").next().unwrap().to_string();
         assert_eq!(background(&a), background(&b));
         assert_ne!(a, b);
@@ -374,8 +387,24 @@ mod tests {
 
     #[test]
     fn style_changes_only_the_curve() {
-        let a = generate_icon("apple", SIGN, ForegroundStyle::Crossing, 100, 100);
-        let b = generate_icon("apple", SIGN, ForegroundStyle::NoCrossing, 100, 100);
+        let a = icon_svg(
+            &["apple"],
+            ComposeLayout::default(),
+            SIGN,
+            SignatureStyle::Crossing,
+            Color::BLACK,
+            100,
+            100,
+        );
+        let b = icon_svg(
+            &["apple"],
+            ComposeLayout::default(),
+            SIGN,
+            SignatureStyle::NoCrossing,
+            Color::BLACK,
+            100,
+            100,
+        );
         let background = |svg: &str| svg.split("<path ").next().unwrap().to_string();
         assert_eq!(background(&a), background(&b));
         assert_ne!(a, b);
@@ -383,14 +412,22 @@ mod tests {
 
     #[test]
     fn no_tags_gives_default_icon() {
-        let svg = generate_icon_from_tags(&[] as &[&str], SIGN, STYLE, 100, 100);
+        let svg = icon_svg(
+            &[] as &[&str],
+            ComposeLayout::default(),
+            SIGN,
+            STYLE,
+            Color::BLACK,
+            100,
+            100,
+        );
         assert!(svg.contains(r##"fill="#808080""##));
         assert!(svg.contains("<path d=\"M "));
     }
 
     #[test]
     fn multiple_tags_are_tiled_in_the_given_order() {
-        let svg = compose_ptag(&["apple", "banana"], ComposeLayout::Grid, 100, 80);
+        let svg = background_svg(&["apple", "banana"], ComposeLayout::Grid, 100, 80);
         assert!(svg.starts_with(
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80" viewBox="0 0 100 80">"#
         ));
@@ -398,35 +435,36 @@ mod tests {
         let apple_tile = svg.find(r#"<svg x="0" y="0" "#).expect("top-left tile");
         let banana_tile = svg.find(r#"<svg x="50" y="0" "#).expect("top-right tile");
         assert!(apple_tile < banana_tile);
-        let apple_body = generate_ptag("apple", 50, 40);
+        let apple_body = background_svg(&["apple"], ComposeLayout::default(), 50, 40);
         let apple_body = apple_body.split_once('>').map(|(_, rest)| rest).unwrap();
         assert!(svg[apple_tile..banana_tile].contains(apple_body));
     }
 
     #[test]
     fn three_tags_leave_bottom_right_empty() {
-        let svg = compose_ptag(&["c", "a", "b"], ComposeLayout::Grid, 100, 100);
+        let svg = background_svg(&["c", "a", "b"], ComposeLayout::Grid, 100, 100);
         assert!(svg.contains(r#"<svg x="0" y="50" "#));
         assert!(!svg.contains(r#"<svg x="50" y="50" "#));
     }
 
     #[test]
     fn more_than_four_tags_are_truncated() {
-        let svg = compose_ptag(&["e", "d", "c", "b", "a"], ComposeLayout::Grid, 100, 100);
+        let svg = background_svg(&["e", "d", "c", "b", "a"], ComposeLayout::Grid, 100, 100);
         assert_eq!(svg.matches("<svg x=").count(), MAX_COMPOSED_TAGS);
     }
 
     #[test]
     fn composed_icon_draws_one_large_curve_on_top() {
-        let svg = compose_icon(
+        let svg = icon_svg(
             &["b", "a", "c", "d"],
             ComposeLayout::Grid,
             SIGN,
             STYLE,
+            Color::BLACK,
             100,
             100,
         );
-        // Four tiles plus one full-size foreground layer.
+        // Four tiles plus one full-size signature layer.
         assert_eq!(svg.matches("<svg x=").count(), MAX_COMPOSED_TAGS + 1);
         assert_eq!(svg.matches("<path ").count(), 1);
         let curve_layer = svg.rfind("<svg x=").unwrap();
@@ -436,7 +474,7 @@ mod tests {
         assert!(svg[curve_layer..].contains("<path "));
         // The curve is the same one a single icon of the same size would get.
         let mut expected = IconBuilder::new(100, 100);
-        expected.add_foreground(SIGN, STYLE);
+        expected.add_signature(SIGN, STYLE, Color::BLACK);
         let expected_path = expected.to_svg();
         let expected_path = expected_path.split("<path ").nth(1).unwrap();
         assert!(svg.contains(expected_path));
@@ -446,7 +484,12 @@ mod tests {
     fn composed_pattern_ids_name_the_same_definition() {
         // Tiles may repeat a pattern id. That is harmless only when every
         // definition with the same id is the same text.
-        let svg = generate_ptag_from_tags(&["abcdef", "ghijkl", "mnopqr", "stuvwx"], 200, 200);
+        let svg = background_svg(
+            &["abcdef", "ghijkl", "mnopqr", "stuvwx"],
+            ComposeLayout::default(),
+            200,
+            200,
+        );
         let mut by_id: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
         for (pos, _) in svg.match_indices("<pattern id=\"") {
             let end = svg[pos..].find("</pattern>").unwrap() + pos;

@@ -4,31 +4,38 @@ Successor of [picturesque-tags](https://github.com/sosuisen/picturesque-tags-rus
 It generates two kinds of SVG marks, and the same inputs always produce the same SVG.
 
 - **Tag icons**, as in picturesque-tags. The background comes from the tag.
-  The hand-drawn style curve on top comes from a separate string called the signature,
-  which stands for the owner's handwritten sign.
+  The hand-drawn style mark on top comes from a separate string called the signature,
+  which stands for the owner's handwritten sign. The mark alone is also available.
 - **Sketchy underlines**: a few nearly straight bezier strokes laid over each other,
   like a marker dragged across the paper more than once. The shape comes from a seed string.
   The colors come from the tags, the same way the tag icon gets its colors,
   so a title and its icon read as one piece.
 
-Every item of picturesque-tags is here under the same name.
-Replace `picturesque_tags` with `picturesque_marks` and the code builds as before.
+Every function that returns an SVG string ends in `_svg`.
 
 ## Usage
 
 ### Tag icons
 
 ```rust
-use picturesque_marks::{ForegroundStyle, generate_icon, generate_ptag};
+use picturesque_marks::{Color, ComposeLayout, SignatureStyle, background_svg, icon_svg, signature_svg};
 
-// Background only
-let svg = generate_ptag("apple", 100, 100);
+// Three kinds of SVG: the signature mark, the background, and the icon that lays the two over each other.
 
-// Background plus a foreground curve generated from the signature.
-// ForegroundStyle::Crossing draws a curve that crosses itself exactly once, like a loop in a sign.
-// ForegroundStyle::NoCrossing draws a curve that never crosses itself.
-// ForegroundStyle::Face is NoCrossing plus two short vertical bars as eyes.
-let svg = generate_icon("apple", "Hidekazu", ForegroundStyle::Crossing, 128, 128);
+// The signature mark alone, generated from the signature string.
+// SignatureStyle::Crossing draws a curve that crosses itself exactly once, like a loop in a sign.
+// SignatureStyle::NoCrossing draws a curve that never crosses itself.
+// SignatureStyle::Face is NoCrossing plus two short vertical bars as eyes.
+// SignatureStyle::Blob is the Face outline filled, without stroke or eyes.
+// The color is the stroke of the curve and the eyes, or the fill of Blob.
+let svg = signature_svg("Hidekazu", SignatureStyle::Crossing, Color::BLACK, 128, 128);
+let svg = signature_svg("Hidekazu", SignatureStyle::Blob, Color::rgb(0xF9, 0xA2, 0xA2), 128, 128);
+
+// The background alone, generated from the tags.
+let svg = background_svg(&["apple"], ComposeLayout::default(), 100, 100);
+
+// The icon: the background with the signature mark on top.
+let svg = icon_svg(&["apple"], ComposeLayout::default(), "Hidekazu", SignatureStyle::Crossing, Color::BLACK, 128, 128);
 
 // Multiple tags: up to four are composed into one icon, in the given order.
 // The layout is named by `ComposeLayout`. Put the main tag first in both layouts.
@@ -36,23 +43,21 @@ let svg = generate_icon("apple", "Hidekazu", ForegroundStyle::Crossing, 128, 128
 //   One more tag goes bottom-right. Two go top-right and bottom-left.
 //   Three go top-right, bottom-left and bottom-right.
 // - `Grid`: a 2x2 grid of tiles. The first tag is the top-left tile.
-// The signature curve is drawn once over the whole icon.
-use picturesque_marks::{ComposeLayout, compose_icon};
-let svg = compose_icon(&["cardbox", "card"], ComposeLayout::Grid, "Hidekazu", ForegroundStyle::NoCrossing, 128, 128);
-let svg = compose_icon(&["cardbox", "card"], ComposeLayout::Overlay, "Hidekazu", ForegroundStyle::NoCrossing, 128, 128);
-// `generate_icon_from_tags` and `generate_ptag_from_tags` are the same with the default layout.
+// The signature mark is drawn once over the whole icon.
+let svg = icon_svg(&["cardbox", "card"], ComposeLayout::Overlay, "Hidekazu", SignatureStyle::NoCrossing, Color::BLACK, 128, 128);
+let svg = icon_svg(&["cardbox", "card"], ComposeLayout::Grid, "Hidekazu", SignatureStyle::NoCrossing, Color::BLACK, 128, 128);
 ```
 
 Use `IconBuilder` directly for finer control.
 
 ```rust
-use picturesque_marks::{Color, ForegroundStyle, HatchPatternType, IconBuilder};
+use picturesque_marks::{Color, HatchPatternType, IconBuilder, SignatureStyle};
 
 let mut builder = IconBuilder::new(100, 100);
 builder
-    .generate_bg_from_text("apple")
+    .add_background_from_tag("apple")
     .add_circle(HatchPatternType::Dots, Color::rgb(0x9B, 0xA9, 0xEB), 20.0, 0.0, 0.0)
-    .add_foreground("Hidekazu", ForegroundStyle::Crossing);
+    .add_signature("Hidekazu", SignatureStyle::Crossing, Color::BLACK);
 let svg = builder.to_svg();
 ```
 
@@ -88,7 +93,7 @@ Three strokes are drawn. Their colors are picked from the tags in this order, un
 3. The first color again, as often as needed.
 
 The tags are cut to four in the given order, as the composed icon does, so the colors follow the tiles of the icon.
-`IconBuilder::background_colors(tag)` gives the main and sub shape colors of one tag.
+`background_colors(tag)` gives the main and sub shape colors of one tag.
 With no tags, all three colors come from the palette, chosen by the seed.
 
 ### Command line
@@ -98,6 +103,9 @@ cargo run -- --size 128 apple > apple.svg
 cargo run -- --size 128x96 --signature Hidekazu apple > apple.svg
 cargo run -- --size 128 --signature Hidekazu --style no-crossing apple > apple.svg
 cargo run -- --size 128 --signature Hidekazu --style face apple > apple.svg
+cargo run -- --size 128 --signature Hidekazu --style blob --color F9A2A2 apple > apple.svg
+# The signature mark alone
+cargo run -- signature --size 128 --style blob --color F9A2A2 Hidekazu > hidekazu.svg
 # Up to four tags are composed into one icon, in the given order. --layout is overlay (default) or grid
 cargo run -- --size 128 --signature Hidekazu --layout grid cardbox card > cardbox_card.svg
 cargo run -- --size 128 --signature Hidekazu --layout overlay cardbox card > cardbox_card_overlay.svg
@@ -147,7 +155,7 @@ Coordinates are rounded to one decimal and written the way JavaScript prints num
 
 ## Differences from the original C# picturesque-tags
 
-- The foreground curve is generated from the signature with a seeded PCG32 generator. The original used a non-deterministic random generator.
+- The signature mark is generated from the signature with a seeded PCG32 generator. The original used a non-deterministic random generator.
 - The SVG is built as a string without an external SVG library.
 - Pattern IDs are sequential numbers instead of GUIDs, so the same tag yields the same SVG string.
 - Colors are always written as `#RRGGBB`.

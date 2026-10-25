@@ -21,7 +21,7 @@ const FOREGROUND_SAMPLES: usize = 24;
 /// How many times the harmonics are redrawn when they do not give exactly one loop.
 const FOREGROUND_MAX_TRIES: usize = 16;
 
-/// Eye placement for `ForegroundStyle::Face`, as fractions of the outline's bounding box.
+/// Eye placement for `SignatureStyle::Face`, as fractions of the outline's bounding box.
 /// Distance between the two eyes.
 const EYE_GAP: f32 = 0.22;
 /// Length of each eye bar.
@@ -37,9 +37,9 @@ struct Harmonic {
     phase: f32,
 }
 
-/// Shape family of the foreground curve.
+/// How the signature is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum ForegroundStyle {
+pub enum SignatureStyle {
     /// A closed curve that crosses itself exactly once, like a loop in a handwritten sign.
     #[default]
     Crossing,
@@ -48,12 +48,16 @@ pub enum ForegroundStyle {
     /// The `NoCrossing` curve with two short vertical bars as eyes,
     /// one third down from the top and slightly to the right.
     Face,
+    /// The `NoCrossing` outline filled with the signature color. No stroke
+    /// and no eyes. Its outline is the same as `Face` gives for the same
+    /// signature and size.
+    Blob,
 }
 
 /// Gray of the default background, used when the tag is empty.
 const DEFAULT_BACKGROUND_COLOR: Color = Color::rgb(128, 128, 128);
 
-/// Colors of the background shapes of a tag. See `IconBuilder::background_colors`.
+/// Colors of the background shapes of a tag. See [`background_colors`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BackgroundColors {
     /// Color of the main shape. Always drawn.
@@ -143,10 +147,29 @@ impl BackgroundPlan {
     }
 }
 
+/// Returns the colors of the background shapes that
+/// `IconBuilder::add_background_from_tag` draws for the tag, without drawing them.
+///
+/// An empty tag gives the gray of the default background and no sub shapes.
+pub fn background_colors(tag: &str) -> BackgroundColors {
+    match BackgroundPlan::from_tag(tag) {
+        Some(plan) => BackgroundColors {
+            main: plan.main.color,
+            sub1: plan.sub1.map(|sub| sub.color),
+            sub2: plan.sub2.map(|sub| sub.color),
+        },
+        None => BackgroundColors {
+            main: DEFAULT_BACKGROUND_COLOR,
+            sub1: None,
+            sub2: None,
+        },
+    }
+}
+
 /// SVG icon builder.
 ///
-/// The background shapes are chosen deterministically from the tag by `generate_bg_from_text`.
-/// The foreground curve is chosen deterministically from the signature by `add_foreground`.
+/// The background shapes are chosen deterministically from the tag by `add_background_from_tag`.
+/// The signature is drawn deterministically from the signature string by `add_signature`.
 #[derive(Debug, Clone)]
 pub struct IconBuilder {
     width: i32,
@@ -245,9 +268,9 @@ impl IconBuilder {
     /// Adds background shapes chosen deterministically from the tag string.
     ///
     /// An empty tag produces the default background (a gray circle).
-    pub fn generate_bg_from_text(&mut self, tag: &str) -> &mut Self {
+    pub fn add_background_from_tag(&mut self, tag: &str) -> &mut Self {
         let Some(plan) = BackgroundPlan::from_tag(tag) else {
-            return self.default_background();
+            return self.add_default_background();
         };
 
         let width = self.width as f32;
@@ -276,25 +299,6 @@ impl IconBuilder {
         };
 
         self
-    }
-
-    /// Returns the colors of the background shapes that `generate_bg_from_text`
-    /// draws for the tag, without drawing them.
-    ///
-    /// An empty tag gives the gray of the default background and no sub shapes.
-    pub fn background_colors(tag: &str) -> BackgroundColors {
-        match BackgroundPlan::from_tag(tag) {
-            Some(plan) => BackgroundColors {
-                main: plan.main.color,
-                sub1: plan.sub1.map(|sub| sub.color),
-                sub2: plan.sub2.map(|sub| sub.color),
-            },
-            None => BackgroundColors {
-                main: DEFAULT_BACKGROUND_COLOR,
-                sub1: None,
-                sub2: None,
-            },
-        }
     }
 
     /// Registers the pattern and returns the value for the shape's `fill` attribute.
@@ -392,13 +396,43 @@ impl IconBuilder {
     ///
     /// The outline is a polar function r(θ) = R × (1 + Σ a_k × sin(kθ + φ_k)).
     ///
-    /// With `ForegroundStyle::Crossing`, the k = 1 term has an amplitude above 1,
+    /// With `SignatureStyle::Crossing`, the k = 1 term has an amplitude above 1,
     /// which makes r negative on part of the circle. The curve then passes through
     /// the origin twice and crosses itself exactly once there (a limaçon).
-    /// With `ForegroundStyle::NoCrossing`, only k = 2..5 are used and their total
+    /// With `SignatureStyle::NoCrossing`, only k = 2..5 are used and their total
     /// amplitude stays below 1, so r is always positive and the curve never crosses itself.
     /// The sampled points are joined with Catmull-Rom splines converted to cubic Beziers.
-    pub fn add_foreground(&mut self, signature: &str, style: ForegroundStyle) -> &mut Self {
+    ///
+    /// `color` is the stroke color of the curve and the eyes, or the fill
+    /// color of `SignatureStyle::Blob`.
+    pub fn add_signature(
+        &mut self,
+        signature: &str,
+        style: SignatureStyle,
+        color: Color,
+    ) -> &mut Self {
+        let points = self.signature_outline(signature, style);
+        let d = Self::closed_catmull_rom_path(&points);
+        let hex = color.to_hex();
+        match style {
+            SignatureStyle::Blob => {
+                self.fg_group
+                    .push(format!(r##"<path d="{d}" fill="{hex}"/>"##));
+            }
+            _ => {
+                self.fg_group.push(format!(
+                    r##"<path d="{d}" stroke="{hex}" stroke-width="5" fill="none"/>"##
+                ));
+                if style == SignatureStyle::Face {
+                    self.fg_group.extend(Self::eye_lines(&points, &hex));
+                }
+            }
+        }
+        self
+    }
+
+    /// The points of the signature outline, centered as the foreground draws it.
+    fn signature_outline(&self, signature: &str, style: SignatureStyle) -> Vec<(f32, f32)> {
         // PCG32 is used instead of rand's default generators because its algorithm
         // is fixed, so the same signature keeps giving the same curve across versions.
         let mut rng = Pcg32::seed_from_u64(Self::hash_u64(signature));
@@ -419,8 +453,8 @@ impl IconBuilder {
         let (cx, cy) = (jitter(), jitter());
 
         let harmonics = match style {
-            ForegroundStyle::Crossing => Self::draw_single_loop_harmonics(&mut rng),
-            ForegroundStyle::NoCrossing | ForegroundStyle::Face => {
+            SignatureStyle::Crossing => Self::draw_single_loop_harmonics(&mut rng),
+            SignatureStyle::NoCrossing | SignatureStyle::Face | SignatureStyle::Blob => {
                 Self::draw_no_crossing_harmonics(&mut rng)
             }
         };
@@ -444,26 +478,16 @@ impl IconBuilder {
         let (min_x, max_x, min_y, max_y) = Self::bounding_box(&raw);
         let shift_x = cx - (min_x + max_x) / 2.0;
         let shift_y = cy - (min_y + max_y) / 2.0;
-        let points: Vec<(f32, f32)> = raw
-            .iter()
+        raw.iter()
             .map(|&(x, y)| (x + shift_x, y + shift_y))
-            .collect();
-
-        let d = Self::closed_catmull_rom_path(&points);
-        self.fg_group.push(format!(
-            r##"<path d="{d}" stroke="#000000" stroke-width="5" fill="none"/>"##
-        ));
-        if style == ForegroundStyle::Face {
-            self.add_eyes(&points);
-        }
-        self
+            .collect()
     }
 
-    /// Adds two short vertical bars as eyes inside the outline.
+    /// Two short vertical bars as eyes inside the outline, as SVG elements.
     ///
     /// The eyes sit one third down from the top of the outline's bounding box,
     /// and a little to the right of its center so the face does not look symmetric.
-    fn add_eyes(&mut self, outline: &[(f32, f32)]) {
+    fn eye_lines(outline: &[(f32, f32)], hex: &str) -> Vec<String> {
         let (min_x, max_x, min_y, max_y) = Self::bounding_box(outline);
         let width = max_x - min_x;
         let height = max_y - min_y;
@@ -472,14 +496,16 @@ impl IconBuilder {
         let half_gap = width * EYE_GAP / 2.0;
         let half_len = height * EYE_LENGTH / 2.0;
         let fmt = |v: f32| ((v * 10.0).round() / 10.0).to_string();
-        for x in [eyes_center_x - half_gap, eyes_center_x + half_gap] {
-            self.fg_group.push(format!(
-                r##"<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="#000000" stroke-width="5" stroke-linecap="round"/>"##,
-                x = fmt(x),
-                y1 = fmt(eye_y - half_len),
-                y2 = fmt(eye_y + half_len),
-            ));
-        }
+        [eyes_center_x - half_gap, eyes_center_x + half_gap]
+            .map(|x| {
+                format!(
+                    r##"<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="{hex}" stroke-width="5" stroke-linecap="round"/>"##,
+                    x = fmt(x),
+                    y1 = fmt(eye_y - half_len),
+                    y2 = fmt(eye_y + half_len),
+                )
+            })
+            .to_vec()
     }
 
     /// Returns (min_x, max_x, min_y, max_y) of the points.
@@ -620,7 +646,7 @@ impl IconBuilder {
     }
 
     /// Adds the default background: a gray circle.
-    pub fn default_background(&mut self) -> &mut Self {
+    pub fn add_default_background(&mut self) -> &mut Self {
         let half = (self.width / 2) as f32;
         self.add_circle(
             HatchPatternType::Fill,
@@ -632,8 +658,14 @@ impl IconBuilder {
     }
 
     /// Adds the default icon: a gray circle and a foreground curve from the signature.
-    pub fn default_icon(&mut self, signature: &str, style: ForegroundStyle) -> &mut Self {
-        self.default_background().add_foreground(signature, style)
+    pub fn add_default_icon(
+        &mut self,
+        signature: &str,
+        style: SignatureStyle,
+        color: Color,
+    ) -> &mut Self {
+        self.add_default_background()
+            .add_signature(signature, style, color)
     }
 
     /// Returns the SVG string. No XML declaration.
@@ -693,8 +725,8 @@ mod tests {
 
     #[test]
     fn same_tag_gives_same_svg() {
-        let a = crate::generate_ptag("apple", 100, 100);
-        let b = crate::generate_ptag("apple", 100, 100);
+        let a = crate::background_svg(&["apple"], crate::ComposeLayout::default(), 100, 100);
+        let b = crate::background_svg(&["apple"], crate::ComposeLayout::default(), 100, 100);
         assert_eq!(a, b);
         assert!(a.starts_with(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="-50 -50 100 100">"#));
     }
@@ -725,7 +757,7 @@ mod tests {
     #[test]
     fn long_tag_adds_sub_circles_and_pattern() {
         let mut builder = IconBuilder::new(100, 100);
-        builder.generate_bg_from_text("abcdefghijkl");
+        builder.add_background_from_tag("abcdefghijkl");
         // Two sub circles plus the main shape make three background elements.
         assert_eq!(builder.bg_group.len(), 3);
         let svg = builder.to_svg();
@@ -736,7 +768,7 @@ mod tests {
 
     #[test]
     fn empty_tag_gives_default_background_without_curve() {
-        let svg = crate::generate_ptag("", 100, 100);
+        let svg = crate::background_svg(&[""], crate::ComposeLayout::default(), 100, 100);
         assert!(svg.contains(r##"<circle cx="50" cy="50" r="50" fill="#808080"/>"##));
         assert!(!svg.contains("<path "));
     }
@@ -744,7 +776,7 @@ mod tests {
     #[test]
     fn default_icon_has_gray_circle_and_curve() {
         let mut builder = IconBuilder::new(100, 100);
-        builder.default_icon("sign", ForegroundStyle::Crossing);
+        builder.add_default_icon("sign", SignatureStyle::Crossing, Color::BLACK);
         let svg = builder.to_svg();
         assert!(svg.contains(r##"fill="#808080""##));
         assert!(svg.contains("<path d=\"M "));
@@ -753,7 +785,7 @@ mod tests {
     #[test]
     fn foreground_adds_a_path_even_for_tiny_icons() {
         let mut builder = IconBuilder::new(2, 2);
-        builder.add_foreground("sign", ForegroundStyle::Crossing);
+        builder.add_signature("sign", SignatureStyle::Crossing, Color::BLACK);
         assert_eq!(builder.fg_group.len(), 1);
     }
 
@@ -761,8 +793,8 @@ mod tests {
     fn same_signature_gives_same_curve() {
         let mut a = IconBuilder::new(100, 100);
         let mut b = IconBuilder::new(100, 100);
-        a.add_foreground("Hidekazu", ForegroundStyle::Crossing);
-        b.add_foreground("Hidekazu", ForegroundStyle::Crossing);
+        a.add_signature("Hidekazu", SignatureStyle::Crossing, Color::BLACK);
+        b.add_signature("Hidekazu", SignatureStyle::Crossing, Color::BLACK);
         assert_eq!(a.fg_group, b.fg_group);
     }
 
@@ -770,15 +802,15 @@ mod tests {
     fn different_signatures_give_different_curves() {
         let mut a = IconBuilder::new(100, 100);
         let mut b = IconBuilder::new(100, 100);
-        a.add_foreground("alice", ForegroundStyle::Crossing);
-        b.add_foreground("bob", ForegroundStyle::Crossing);
+        a.add_signature("alice", SignatureStyle::Crossing, Color::BLACK);
+        b.add_signature("bob", SignatureStyle::Crossing, Color::BLACK);
         assert_ne!(a.fg_group, b.fg_group);
     }
 
     #[test]
     fn foreground_path_has_one_segment_per_sample() {
         let mut builder = IconBuilder::new(100, 100);
-        builder.add_foreground("sign", ForegroundStyle::Crossing);
+        builder.add_signature("sign", SignatureStyle::Crossing, Color::BLACK);
         let path = &builder.fg_group[0];
         assert_eq!(path.matches(" C ").count(), FOREGROUND_SAMPLES);
         assert!(path.contains(" Z\""));
@@ -834,9 +866,48 @@ mod tests {
     }
 
     #[test]
+    fn blob_fills_the_face_outline_with_the_color() {
+        let mut face = IconBuilder::new(100, 100);
+        face.add_signature("sign", SignatureStyle::Face, Color::BLACK);
+        let mut blob = IconBuilder::new(100, 100);
+        blob.add_signature("sign", SignatureStyle::Blob, Color::rgb(0xF9, 0xA2, 0xA2));
+        let background = blob;
+
+        assert!(background.bg_group.is_empty());
+        assert_eq!(background.fg_group.len(), 1);
+        let outline = |e: &str| {
+            e.split("d=\"")
+                .nth(1)
+                .unwrap()
+                .split('"')
+                .next()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(outline(&background.fg_group[0]), outline(&face.fg_group[0]));
+        assert!(background.fg_group[0].ends_with(r##"fill="#F9A2A2"/>"##));
+        assert!(!background.fg_group[0].contains("stroke"));
+    }
+
+    #[test]
+    fn signature_color_is_used_for_stroke_eyes_and_fill() {
+        let red = Color::rgb(0xF9, 0xA2, 0xA2);
+        let mut face = IconBuilder::new(100, 100);
+        face.add_signature("sign", SignatureStyle::Face, red);
+        assert!(
+            face.fg_group
+                .iter()
+                .all(|e| e.contains(r##"stroke="#F9A2A2""##))
+        );
+        let mut blob = IconBuilder::new(100, 100);
+        blob.add_signature("sign", SignatureStyle::Blob, red);
+        assert!(blob.fg_group[0].contains(r##"fill="#F9A2A2""##));
+    }
+
+    #[test]
     fn face_adds_two_eyes_at_one_third_height_right_of_center() {
         let mut builder = IconBuilder::new(100, 100);
-        builder.add_foreground("sign", ForegroundStyle::Face);
+        builder.add_signature("sign", SignatureStyle::Face, Color::BLACK);
         assert_eq!(builder.fg_group.len(), 3);
         assert!(builder.fg_group[0].starts_with("<path "));
         let eyes: Vec<&String> = builder.fg_group[1..].iter().collect();
@@ -844,7 +915,7 @@ mod tests {
 
         // Same outline as NoCrossing.
         let mut plain = IconBuilder::new(100, 100);
-        plain.add_foreground("sign", ForegroundStyle::NoCrossing);
+        plain.add_signature("sign", SignatureStyle::NoCrossing, Color::BLACK);
         assert_eq!(builder.fg_group[0], plain.fg_group[0]);
 
         let attr = |e: &str, name: &str| -> f32 {
@@ -893,13 +964,13 @@ mod tests {
     #[test]
     fn foreground_fits_inside_icon() {
         for (signature, style) in [
-            ("a", ForegroundStyle::Crossing),
-            ("Hidekazu", ForegroundStyle::Crossing),
-            ("sosuisen", ForegroundStyle::NoCrossing),
-            ("署名", ForegroundStyle::NoCrossing),
+            ("a", SignatureStyle::Crossing),
+            ("Hidekazu", SignatureStyle::Crossing),
+            ("sosuisen", SignatureStyle::NoCrossing),
+            ("署名", SignatureStyle::NoCrossing),
         ] {
             let mut builder = IconBuilder::new(100, 100);
-            builder.add_foreground(signature, style);
+            builder.add_signature(signature, style, Color::BLACK);
             let path = &builder.fg_group[0];
             let d = path
                 .split("d=\"")

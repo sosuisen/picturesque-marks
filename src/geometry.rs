@@ -93,7 +93,7 @@ impl Geometry {
     }
 
     /// Picks a placement for the area from a hash value.
-    pub fn generate_from_hash(area: AreaName, hash: u32) -> Self {
+    pub fn from_hash(area: AreaName, hash: u32) -> Self {
         Self::lookup(area, GeometryType::from_index(hash))
     }
 
@@ -181,9 +181,9 @@ mod tests {
     }
 
     #[test]
-    fn generate_from_hash_wraps_by_count() {
-        let a = Geometry::generate_from_hash(AreaName::BgMain, 1);
-        let b = Geometry::generate_from_hash(AreaName::BgMain, 13);
+    fn from_hash_wraps_by_count() {
+        let a = Geometry::from_hash(AreaName::BgMain, 1);
+        let b = Geometry::from_hash(AreaName::BgMain, 13);
         assert_eq!(a, b);
     }
 }

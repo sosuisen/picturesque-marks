@@ -8,8 +8,8 @@
 //! Run: `cargo run --example gallery > gallery.html`
 
 use picturesque_marks::{
-    compose_ptag, generate_icon, generate_icon_from_tags, generate_ptag, generate_ptag_from_tags,
-    underline_svg, ComposeLayout, ForegroundStyle, UnderlineOptions,
+    Color, ColorName, ComposeLayout, SignatureStyle, UnderlineOptions, background_svg, icon_svg,
+    signature_svg, underline_svg,
 };
 
 const TAGS: &[&str] = &[
@@ -61,25 +61,25 @@ const TAG_SETS: &[&[&str]] = &[
 ];
 
 // A few examples with a signature curve. Each entry is (signature, style, tags).
-const SIGNED: &[(&str, ForegroundStyle, &[&str])] = &[
-    ("Alice", ForegroundStyle::Crossing, &["banana"]),
-    ("Alice", ForegroundStyle::NoCrossing, &["banana"]),
-    ("Bob", ForegroundStyle::Crossing, &["banana"]),
-    ("Bob", ForegroundStyle::NoCrossing, &["banana"]),
-    ("Alice", ForegroundStyle::Face, &["banana"]),
-    ("Bob", ForegroundStyle::Face, &["banana"]),
-    ("Alice", ForegroundStyle::Crossing, &["cardbox", "card"]),
+const SIGNED: &[(&str, SignatureStyle, &[&str])] = &[
+    ("Alice", SignatureStyle::Crossing, &["banana"]),
+    ("Alice", SignatureStyle::NoCrossing, &["banana"]),
+    ("Bob", SignatureStyle::Crossing, &["banana"]),
+    ("Bob", SignatureStyle::NoCrossing, &["banana"]),
+    ("Alice", SignatureStyle::Face, &["banana"]),
+    ("Bob", SignatureStyle::Face, &["banana"]),
+    ("Alice", SignatureStyle::Crossing, &["cardbox", "card"]),
     (
         "Bob",
-        ForegroundStyle::NoCrossing,
+        SignatureStyle::NoCrossing,
         &["cardbox", "card", "framework"],
     ),
     (
         "Carol",
-        ForegroundStyle::Face,
+        SignatureStyle::Face,
         &["cardbox", "card", "framework"],
     ),
-    ("Alice", ForegroundStyle::Crossing, &[]),
+    ("Alice", SignatureStyle::Crossing, &[]),
 ];
 
 fn figure(svg: &str, caption: &str) {
@@ -105,7 +105,10 @@ fn main() {
     println!("<h2>Single tag</h2>");
     println!("<div style=\"display:flex;flex-wrap:wrap;\">");
     for tag in TAGS {
-        figure(&generate_ptag(tag, size, size), tag);
+        figure(
+            &background_svg(&[tag], ComposeLayout::default(), size, size),
+            tag,
+        );
     }
     println!("</div>");
 
@@ -113,7 +116,10 @@ fn main() {
         println!("<h2>Multiple tags ({layout:?})</h2>");
         println!("<div style=\"display:flex;flex-wrap:wrap;\">");
         for tags in TAG_SETS {
-            figure(&compose_ptag(tags, layout, size, size), &tags_caption(tags));
+            figure(
+                &background_svg(tags, layout, size, size),
+                &tags_caption(tags),
+            );
         }
         println!("</div>");
     }
@@ -122,8 +128,24 @@ fn main() {
     println!("<div style=\"display:flex;flex-wrap:wrap;\">");
     for (signature, style, tags) in SIGNED {
         let svg = match tags {
-            [tag] => generate_icon(tag, signature, *style, size, size),
-            _ => generate_icon_from_tags(tags, signature, *style, size, size),
+            [tag] => icon_svg(
+                &[tag],
+                ComposeLayout::default(),
+                signature,
+                *style,
+                Color::BLACK,
+                size,
+                size,
+            ),
+            _ => icon_svg(
+                tags,
+                ComposeLayout::default(),
+                signature,
+                *style,
+                Color::BLACK,
+                size,
+                size,
+            ),
         };
         figure(
             &svg,
@@ -132,11 +154,29 @@ fn main() {
     }
     println!("</div>");
 
+    println!("<h2>Signature</h2>");
+    println!("<div style=\"display:flex;flex-wrap:wrap;\">");
+    for (signature, style, color) in [
+        ("Alice", SignatureStyle::Crossing, Color::BLACK),
+        ("Alice", SignatureStyle::NoCrossing, Color::BLACK),
+        ("Alice", SignatureStyle::Face, Color::BLACK),
+        ("Alice", SignatureStyle::Face, ColorName::Blue.color()),
+        ("Alice", SignatureStyle::Blob, ColorName::Red.color()),
+        ("Bob", SignatureStyle::Blob, ColorName::Cyan.color()),
+        ("Carol", SignatureStyle::Blob, Color::rgb(0x80, 0x80, 0x80)),
+    ] {
+        figure(
+            &signature_svg(signature, style, color, size, size),
+            &format!("sign: {signature} / {style:?} / {}", color.to_hex()),
+        );
+    }
+    println!("</div>");
+
     // The underline takes its colors from the same tags as the icon. The seed stands for
     // the post slug; the heading lines of one post get the slug plus a number.
     println!("<h2>Underline</h2>");
     for tags in TAG_SETS {
-        let icon = generate_ptag_from_tags(tags, size, size);
+        let icon = background_svg(tags, ComposeLayout::default(), size, size);
         let seed = tags_caption(tags);
         let title = underline_svg(
             &seed,

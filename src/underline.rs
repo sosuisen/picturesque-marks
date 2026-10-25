@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::MAX_COMPOSED_TAGS;
 use crate::colors::{Color, ColorName};
-use crate::icon_builder::IconBuilder;
+use crate::icon_builder::background_colors;
 
 /// Number of strokes laid over each other.
 pub const STROKES: usize = 3;
@@ -117,13 +117,18 @@ pub fn underline_colors(tags: &[impl AsRef<str>]) -> Option<[Color; STROKES]> {
     let backgrounds: Vec<_> = tags
         .iter()
         .take(MAX_COMPOSED_TAGS.min(STROKES))
-        .map(|tag| IconBuilder::background_colors(tag.as_ref()))
+        .map(|tag| background_colors(tag.as_ref()))
         .collect();
     let first = backgrounds.first()?;
     let mains = backgrounds.iter().map(|bg| bg.main);
-    let subs = backgrounds.iter().flat_map(|bg| [bg.sub1, bg.sub2]).flatten();
+    let subs = backgrounds
+        .iter()
+        .flat_map(|bg| [bg.sub1, bg.sub2])
+        .flatten();
     let mut picked = mains.chain(subs).chain(std::iter::repeat(first.main));
-    Some(std::array::from_fn(|_| picked.next().expect("repeat never ends")))
+    Some(std::array::from_fn(|_| {
+        picked.next().expect("repeat never ends")
+    }))
 }
 
 /// mulberry32: small and good enough for a few numbers per line. The seed
@@ -265,7 +270,11 @@ mod tests {
         let palette: Vec<String> = ColorName::ALL.iter().map(|c| c.color().to_hex()).collect();
         let from_palette = svg
             .match_indices("stroke=\"")
-            .filter(|(pos, m)| palette.iter().any(|p| svg[pos + m.len()..].starts_with(p.as_str())))
+            .filter(|(pos, m)| {
+                palette
+                    .iter()
+                    .any(|p| svg[pos + m.len()..].starts_with(p.as_str()))
+            })
             .count();
         assert_eq!(from_palette, STROKES);
         assert_eq!(underline_colors(NO_TAGS), None);
@@ -274,10 +283,17 @@ mod tests {
     #[test]
     fn three_tags_give_their_main_colors_in_the_given_order() {
         let colors = underline_colors(&["cherry", "apple", "banana"]).unwrap();
-        let main = |tag| IconBuilder::background_colors(tag).main;
+        let main = |tag| background_colors(tag).main;
         assert_eq!(colors, [main("cherry"), main("apple"), main("banana")]);
-        let svg = underline_svg("post", &["cherry", "apple", "banana"], &UnderlineOptions::default());
-        let strokes: Vec<&str> = svg.match_indices("stroke=\"").map(|(pos, m)| &svg[pos + m.len()..pos + m.len() + 7]).collect();
+        let svg = underline_svg(
+            "post",
+            &["cherry", "apple", "banana"],
+            &UnderlineOptions::default(),
+        );
+        let strokes: Vec<&str> = svg
+            .match_indices("stroke=\"")
+            .map(|(pos, m)| &svg[pos + m.len()..pos + m.len() + 7])
+            .collect();
         assert_eq!(strokes, [hex(colors[0]), hex(colors[1]), hex(colors[2])]);
     }
 
@@ -291,8 +307,8 @@ mod tests {
     #[test]
     fn missing_mains_are_filled_from_sub_shapes_in_tag_order() {
         // "abcdefghij" has four blocks, so both sub shapes; "xyz" has one block, so none.
-        let long = IconBuilder::background_colors("abcdefghij");
-        let short = IconBuilder::background_colors("xyz");
+        let long = background_colors("abcdefghij");
+        let short = background_colors("xyz");
         assert!(long.sub1.is_some() && long.sub2.is_some());
         assert!(short.sub1.is_none() && short.sub2.is_none());
 
@@ -305,13 +321,16 @@ mod tests {
 
     #[test]
     fn first_color_repeats_when_nothing_else_is_left() {
-        let short = IconBuilder::background_colors("xyz");
+        let short = background_colors("xyz");
         assert_eq!(underline_colors(&["xyz"]).unwrap(), [short.main; STROKES]);
 
         // "abcdefghi" has three blocks: a main and one sub shape.
-        let medium = IconBuilder::background_colors("abcdefghi");
+        let medium = background_colors("abcdefghi");
         assert!(medium.sub1.is_some() && medium.sub2.is_none());
-        assert_eq!(underline_colors(&["abcdefghi"]).unwrap(), [medium.main, medium.sub1.unwrap(), medium.main]);
+        assert_eq!(
+            underline_colors(&["abcdefghi"]).unwrap(),
+            [medium.main, medium.sub1.unwrap(), medium.main]
+        );
     }
 
     #[test]
