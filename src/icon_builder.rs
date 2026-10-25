@@ -82,6 +82,12 @@ struct BackgroundPlan {
     sub2: Option<SubShape>,
 }
 
+/// OKLCH lightness of the first sub circle. The palette sits at 0.80, so the
+/// sub circles are lighter than the main shape. See ADR-006.
+const SUB1_LIGHTNESS: f64 = 0.86;
+/// OKLCH lightness of the second sub circle. Lighter than the first.
+const SUB2_LIGHTNESS: f64 = 0.92;
+
 impl BackgroundPlan {
     /// Returns `None` for an empty tag, which gets the default background.
     fn from_tag(tag: &str) -> Option<Self> {
@@ -113,14 +119,14 @@ impl BackgroundPlan {
             },
             main_shape: ShapeType::from_index(main_shape_index),
             main_hatch,
-            sub1: Self::sub_shape(&block3, 0.9),
-            sub2: Self::sub_shape(&block4, 1.1),
+            sub1: Self::sub_shape(&block3, SUB1_LIGHTNESS),
+            sub2: Self::sub_shape(&block4, SUB2_LIGHTNESS),
         })
     }
 
-    /// A sub circle from its block. The first sub is a little darker and the
-    /// second a little lighter than the palette color.
-    fn sub_shape(block: &str, brightness: f64) -> Option<SubShape> {
+    /// A sub circle from its block. Both subs are lighter than the palette
+    /// color, the second more so. See ADR-006.
+    fn sub_shape(block: &str, lightness: f64) -> Option<SubShape> {
         if block.is_empty() {
             return None;
         }
@@ -131,7 +137,7 @@ impl BackgroundPlan {
         Some(SubShape {
             color: ColorName::from_index(color_index)
                 .color()
-                .change_brightness(brightness),
+                .with_oklch_lightness(lightness),
             geometry: GeometryType::from_index(geometry_index),
         })
     }
