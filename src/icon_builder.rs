@@ -10,6 +10,7 @@ use crate::area::AreaName;
 use crate::colors::{Color, ColorName};
 use crate::geometry::{Geometry, GeometryType, ShapeType};
 use crate::hatch_pattern::HatchPatternType;
+use crate::petal::petal_set;
 
 /// Higher harmonics k added to the foreground outline. Low frequencies keep the shape calm.
 const FOREGROUND_HARMONICS: [u32; 4] = [2, 3, 4, 5];
@@ -52,6 +53,23 @@ pub enum SignatureStyle {
     /// and no eyes. Its outline is the same as `Face` gives for the same
     /// signature and size.
     Blob,
+}
+
+/// What the background draws from the tag.
+///
+/// More styles will be added, so match on it with a wildcard arm.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum BackgroundStyle {
+    /// A circle, diamond or pentagon as the main shape, with up to two sub
+    /// circles under it. This is the default.
+    #[default]
+    Shapes,
+    /// Three copies of one asymmetric petal. The main petal is on top. The
+    /// first sub petal is fanned out from its tip, under it. The second sub
+    /// petal crosses it like an X, at the bottom. The colors are the same as
+    /// `Shapes` gives for the tag. See ADR-007.
+    Petal,
 }
 
 /// Gray of the default background, used when the tag is empty.
@@ -265,14 +283,23 @@ impl IconBuilder {
         u64::from_le_bytes(bytes)
     }
 
-    /// Adds background shapes chosen deterministically from the tag string.
+    /// Adds background shapes chosen deterministically from the tag string,
+    /// drawn in the `style`.
     ///
     /// An empty tag produces the default background (a gray circle).
-    pub fn add_background_from_tag(&mut self, tag: &str) -> &mut Self {
+    pub fn add_background_from_tag(&mut self, tag: &str, style: BackgroundStyle) -> &mut Self {
         let Some(plan) = BackgroundPlan::from_tag(tag) else {
             return self.add_default_background();
         };
+        match style {
+            BackgroundStyle::Shapes => self.add_shapes(&plan),
+            BackgroundStyle::Petal => self.add_petals(&plan, Self::hash_u64(tag)),
+        }
+    }
 
+    /// The `BackgroundStyle::Shapes` background: up to two sub circles, then
+    /// the main shape on top.
+    fn add_shapes(&mut self, plan: &BackgroundPlan) -> &mut Self {
         let width = self.width as f32;
 
         for (area, sub) in [(AreaName::BgSub1, plan.sub1), (AreaName::BgSub2, plan.sub2)] {
@@ -299,6 +326,24 @@ impl IconBuilder {
         };
 
         self
+    }
+
+    /// The `BackgroundStyle::Petal` background: the crossing petal, the
+    /// fanned petal, then the main petal on top. A sub petal is drawn only
+    /// when the tag has the block for it, like the sub circles.
+    fn add_petals(&mut self, plan: &BackgroundPlan, seed: u64) -> &mut Self {
+        let set = petal_set(seed);
+        let width = self.width as f32;
+        // One decimal keeps the SVG small; at icon sizes a tenth of a pixel is invisible.
+        let to_icon = |outline: &[(f32, f32)]| -> Vec<(f32, f32)> {
+            let round = |v: f32| (v * width * 10.0).round() / 10.0;
+            outline.iter().map(|&(x, y)| (round(x), round(y))).collect()
+        };
+        for (sub, outline) in [(plan.sub2, &set.sub2), (plan.sub1, &set.sub1)] {
+            let Some(sub) = sub else { continue };
+            self.add_polygon(HatchPatternType::Fill, sub.color, &to_icon(outline));
+        }
+        self.add_polygon(plan.main_hatch, plan.main.color, &to_icon(&set.main))
     }
 
     /// Registers the pattern and returns the value for the shape's `fill` attribute.
@@ -725,10 +770,63 @@ mod tests {
 
     #[test]
     fn same_tag_gives_same_svg() {
-        let a = crate::background_svg(&["apple"], crate::ComposeLayout::default(), 100, 100);
-        let b = crate::background_svg(&["apple"], crate::ComposeLayout::default(), 100, 100);
+        let a = crate::background_svg(
+            &["apple"],
+            crate::ComposeLayout::default(),
+            BackgroundStyle::default(),
+            100,
+            100,
+        );
+        let b = crate::background_svg(
+            &["apple"],
+            crate::ComposeLayout::default(),
+            BackgroundStyle::default(),
+            100,
+            100,
+        );
         assert_eq!(a, b);
         assert!(a.starts_with(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="-50 -50 100 100">"#));
+    }
+
+    #[test]
+    fn petal_draws_one_polygon_per_block_in_the_shapes_colors() {
+        let mut one = IconBuilder::new(100, 100);
+        one.add_background_from_tag("app", BackgroundStyle::Petal);
+        assert_eq!(one.bg_group.len(), 1);
+
+        let mut three = IconBuilder::new(100, 100);
+        three.add_background_from_tag("abcdefghijkl", BackgroundStyle::Petal);
+        assert_eq!(three.bg_group.len(), 3);
+        assert!(three.bg_group.iter().all(|e| e.starts_with("<polygon ")));
+
+        let colors = background_colors("abcdefghijkl");
+        let fill = |e: &str| {
+            e.split("fill=\"")
+                .nth(1)
+                .unwrap()
+                .split('"')
+                .next()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(fill(&three.bg_group[0]), colors.sub2.unwrap().to_hex());
+        assert_eq!(fill(&three.bg_group[1]), colors.sub1.unwrap().to_hex());
+        // The main petal has the hatch of the second block, so its fill may be a pattern.
+        assert!(fill(&three.bg_group[2]).contains(&colors.main.to_hex()[1..]));
+    }
+
+    #[test]
+    fn petal_is_deterministic_and_differs_from_shapes() {
+        let build = |style| {
+            let mut b = IconBuilder::new(100, 100);
+            b.add_background_from_tag("apple", style);
+            b.to_svg()
+        };
+        assert_eq!(build(BackgroundStyle::Petal), build(BackgroundStyle::Petal));
+        assert_ne!(
+            build(BackgroundStyle::Petal),
+            build(BackgroundStyle::Shapes)
+        );
     }
 
     #[test]
@@ -757,7 +855,7 @@ mod tests {
     #[test]
     fn long_tag_adds_sub_circles_and_pattern() {
         let mut builder = IconBuilder::new(100, 100);
-        builder.add_background_from_tag("abcdefghijkl");
+        builder.add_background_from_tag("abcdefghijkl", BackgroundStyle::default());
         // Two sub circles plus the main shape make three background elements.
         assert_eq!(builder.bg_group.len(), 3);
         let svg = builder.to_svg();
@@ -768,7 +866,13 @@ mod tests {
 
     #[test]
     fn empty_tag_gives_default_background_without_curve() {
-        let svg = crate::background_svg(&[""], crate::ComposeLayout::default(), 100, 100);
+        let svg = crate::background_svg(
+            &[""],
+            crate::ComposeLayout::default(),
+            BackgroundStyle::default(),
+            100,
+            100,
+        );
         assert!(svg.contains(r##"<circle cx="50" cy="50" r="50" fill="#808080"/>"##));
         assert!(!svg.contains("<path "));
     }

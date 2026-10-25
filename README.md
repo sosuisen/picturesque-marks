@@ -18,7 +18,7 @@ Every function that returns an SVG string ends in `_svg`.
 ### Tag icons
 
 ```rust
-use picturesque_marks::{Color, ComposeLayout, SignatureStyle, background_svg, icon_svg, signature_svg};
+use picturesque_marks::{BackgroundStyle, Color, ComposeLayout, SignatureStyle, background_svg, icon_svg, signature_svg};
 
 // Three kinds of SVG: the signature mark, the background, and the icon that lays the two over each other.
 
@@ -32,10 +32,14 @@ let svg = signature_svg("Hidekazu", SignatureStyle::Crossing, Color::BLACK, 128,
 let svg = signature_svg("Hidekazu", SignatureStyle::Blob, Color::rgb(0xF9, 0xA2, 0xA2), 128, 128);
 
 // The background alone, generated from the tags.
-let svg = background_svg(&["apple"], ComposeLayout::default(), 100, 100);
+// BackgroundStyle::Shapes (default) draws a circle, diamond or pentagon with up to two sub circles.
+// BackgroundStyle::Petal draws three copies of one asymmetric petal in the same colors:
+// the main petal on top, one fanned out from its tip under it, and one crossing it like an X.
+let svg = background_svg(&["apple"], ComposeLayout::default(), BackgroundStyle::default(), 100, 100);
+let svg = background_svg(&["apple"], ComposeLayout::default(), BackgroundStyle::Petal, 100, 100);
 
 // The icon: the background with the signature mark on top.
-let svg = icon_svg(&["apple"], ComposeLayout::default(), "Hidekazu", SignatureStyle::Crossing, Color::BLACK, 128, 128);
+let svg = icon_svg(&["apple"], ComposeLayout::default(), BackgroundStyle::default(), "Hidekazu", SignatureStyle::Crossing, Color::BLACK, 128, 128);
 
 // Multiple tags: up to four are composed into one icon, in the given order.
 // The layout is named by `ComposeLayout`. Put the main tag first in both layouts.
@@ -44,18 +48,18 @@ let svg = icon_svg(&["apple"], ComposeLayout::default(), "Hidekazu", SignatureSt
 //   Three go top-right, bottom-left and bottom-right.
 // - `Grid`: a 2x2 grid of tiles. The first tag is the top-left tile.
 // The signature mark is drawn once over the whole icon.
-let svg = icon_svg(&["cardbox", "card"], ComposeLayout::Overlay, "Hidekazu", SignatureStyle::NoCrossing, Color::BLACK, 128, 128);
-let svg = icon_svg(&["cardbox", "card"], ComposeLayout::Grid, "Hidekazu", SignatureStyle::NoCrossing, Color::BLACK, 128, 128);
+let svg = icon_svg(&["cardbox", "card"], ComposeLayout::Overlay, BackgroundStyle::default(), "Hidekazu", SignatureStyle::NoCrossing, Color::BLACK, 128, 128);
+let svg = icon_svg(&["cardbox", "card"], ComposeLayout::Grid, BackgroundStyle::default(), "Hidekazu", SignatureStyle::NoCrossing, Color::BLACK, 128, 128);
 ```
 
 Use `IconBuilder` directly for finer control.
 
 ```rust
-use picturesque_marks::{Color, HatchPatternType, IconBuilder, SignatureStyle};
+use picturesque_marks::{BackgroundStyle, Color, HatchPatternType, IconBuilder, SignatureStyle};
 
 let mut builder = IconBuilder::new(100, 100);
 builder
-    .add_background_from_tag("apple")
+    .add_background_from_tag("apple", BackgroundStyle::Shapes)
     .add_circle(HatchPatternType::Dots, Color::rgb(0x9B, 0xA9, 0xEB), 20.0, 0.0, 0.0)
     .add_signature("Hidekazu", SignatureStyle::Crossing, Color::BLACK);
 let svg = builder.to_svg();
@@ -153,6 +157,14 @@ With `spikes`, the bezier stops at 78% to 86% of the width, three to five sharp 
 and a straight run brings the line to its end. Spike tips stay inside the viewBox.
 Coordinates are rounded to one decimal and written the way JavaScript prints numbers.
 
+## Changes since 0.3.0
+
+Added `BackgroundStyle`, the argument after the layout of `background_svg` and `icon_svg`,
+and the second argument of `IconBuilder::add_background_from_tag`. This is a breaking change.
+Pass `BackgroundStyle::default()` for the old `Shapes` look. `BackgroundStyle::Petal` draws
+three copies of one asymmetric petal instead of the shapes. See ADR-007.
+The command line takes `--background shapes|petal`.
+
 ## Changes from 0.2.0
 
 Version 0.3.0 renames most of the API. With `Color::BLACK` as the signature color,
@@ -163,8 +175,8 @@ The three kinds of SVG are now named after what they draw:
 | 0.3.0 | 0.2.0 |
 |---|---|
 | `signature_svg(signature, style, color, w, h)` | none; the signature could not be drawn alone |
-| `background_svg(tags, layout, w, h)` | `generate_ptag`, `generate_ptag_from_tags`, `compose_ptag` |
-| `icon_svg(tags, layout, signature, style, color, w, h)` | `generate_icon`, `generate_icon_from_tags`, `compose_icon` |
+| `background_svg(tags, layout, BackgroundStyle::default(), w, h)` | `generate_ptag`, `generate_ptag_from_tags`, `compose_ptag` |
+| `icon_svg(tags, layout, BackgroundStyle::default(), signature, style, color, w, h)` | `generate_icon`, `generate_icon_from_tags`, `compose_icon` |
 | `background_colors(tag)` | `IconBuilder::background_colors(tag)` |
 | `underline_svg`, `underline_colors` | unchanged |
 

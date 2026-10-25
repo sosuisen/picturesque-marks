@@ -8,8 +8,8 @@
 //! Run: `cargo run --example gallery > gallery.html`
 
 use picturesque_marks::{
-    Color, ColorName, ComposeLayout, SignatureStyle, UnderlineOptions, background_svg, icon_svg,
-    signature_svg, underline_svg,
+    BackgroundStyle, Color, ColorName, ComposeLayout, SignatureStyle, UnderlineOptions,
+    background_svg, icon_svg, signature_svg, underline_svg,
 };
 
 const TAGS: &[&str] = &[
@@ -102,57 +102,63 @@ fn main() {
     println!("<html><head><meta charset=\"utf-8\"><title>Picturesque Marks</title></head><body>");
     println!("<h1>Picturesque Marks</h1>");
 
-    println!("<h2>Single tag</h2>");
-    println!("<div style=\"display:flex;flex-wrap:wrap;\">");
-    for tag in TAGS {
-        figure(
-            &background_svg(&[tag], ComposeLayout::default(), size, size),
-            tag,
-        );
+    for style in [BackgroundStyle::Shapes, BackgroundStyle::Petal] {
+        println!("<h2>Single tag ({style:?})</h2>");
+        println!("<div style=\"display:flex;flex-wrap:wrap;\">");
+        for tag in TAGS {
+            figure(
+                &background_svg(&[tag], ComposeLayout::default(), style, size, size),
+                tag,
+            );
+        }
+        println!("</div>");
     }
-    println!("</div>");
 
     for layout in [ComposeLayout::Grid, ComposeLayout::Overlay] {
         println!("<h2>Multiple tags ({layout:?})</h2>");
         println!("<div style=\"display:flex;flex-wrap:wrap;\">");
         for tags in TAG_SETS {
             figure(
-                &background_svg(tags, layout, size, size),
+                &background_svg(tags, layout, BackgroundStyle::default(), size, size),
                 &tags_caption(tags),
             );
         }
         println!("</div>");
     }
 
-    println!("<h2>With signature</h2>");
-    println!("<div style=\"display:flex;flex-wrap:wrap;\">");
-    for (signature, style, tags) in SIGNED {
-        let svg = match tags {
-            [tag] => icon_svg(
-                &[tag],
-                ComposeLayout::default(),
-                signature,
-                *style,
-                Color::BLACK,
-                size,
-                size,
-            ),
-            _ => icon_svg(
-                tags,
-                ComposeLayout::default(),
-                signature,
-                *style,
-                Color::BLACK,
-                size,
-                size,
-            ),
-        };
-        figure(
-            &svg,
-            &format!("{} / sign: {signature} / {style:?}", tags_caption(tags)),
-        );
+    for background in [BackgroundStyle::Shapes, BackgroundStyle::Petal] {
+        println!("<h2>With signature ({background:?})</h2>");
+        println!("<div style=\"display:flex;flex-wrap:wrap;\">");
+        for (signature, style, tags) in SIGNED {
+            let svg = match tags {
+                [tag] => icon_svg(
+                    &[tag],
+                    ComposeLayout::default(),
+                    background,
+                    signature,
+                    *style,
+                    Color::BLACK,
+                    size,
+                    size,
+                ),
+                _ => icon_svg(
+                    tags,
+                    ComposeLayout::default(),
+                    background,
+                    signature,
+                    *style,
+                    Color::BLACK,
+                    size,
+                    size,
+                ),
+            };
+            figure(
+                &svg,
+                &format!("{} / sign: {signature} / {style:?}", tags_caption(tags)),
+            );
+        }
+        println!("</div>");
     }
-    println!("</div>");
 
     println!("<h2>Signature</h2>");
     println!("<div style=\"display:flex;flex-wrap:wrap;\">");
@@ -176,7 +182,13 @@ fn main() {
     // the post slug; the heading lines of one post get the slug plus a number.
     println!("<h2>Underline</h2>");
     for tags in TAG_SETS {
-        let icon = background_svg(tags, ComposeLayout::default(), size, size);
+        let icon = background_svg(
+            tags,
+            ComposeLayout::default(),
+            BackgroundStyle::default(),
+            size,
+            size,
+        );
         let seed = tags_caption(tags);
         let title = underline_svg(
             &seed,

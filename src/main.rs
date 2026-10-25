@@ -1,15 +1,15 @@
 //! Generates an SVG from the command line and writes it to stdout.
 //!
 //! Usage:
-//! - `picturesque-marks [--size W[xH]] [--signature TEXT] [--style crossing|no-crossing|face|blob] [--color HEX] [--layout grid|overlay] [TAG...]`
+//! - `picturesque-marks [--size W[xH]] [--signature TEXT] [--style crossing|no-crossing|face|blob] [--color HEX] [--layout grid|overlay] [--background shapes|petal] [TAG...]`
 //! - `picturesque-marks signature [--size W[xH]] [--style STYLE] [--color HEX] TEXT`
 //! - `picturesque-marks underline [--spikes] [--class NAME] [--stroke-width W] SEED [TAG...]`
 
 use std::process::ExitCode;
 
 use picturesque_marks::{
-    Color, ComposeLayout, SignatureStyle, UnderlineOptions, background_svg, icon_svg,
-    signature_svg, underline_svg,
+    BackgroundStyle, Color, ComposeLayout, SignatureStyle, UnderlineOptions, background_svg,
+    icon_svg, signature_svg, underline_svg,
 };
 
 fn main() -> ExitCode {
@@ -32,6 +32,7 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
     let mut signature: Option<String> = None;
     let mut style = StyleArg::default();
     let mut layout = ComposeLayout::default();
+    let mut background = BackgroundStyle::default();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -89,6 +90,20 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
                     }
                 };
             }
+            "--background" | "-b" => {
+                let Some(value) = args.next() else {
+                    eprintln!("--background requires a value");
+                    return ExitCode::FAILURE;
+                };
+                background = match value.as_str() {
+                    "shapes" => BackgroundStyle::Shapes,
+                    "petal" => BackgroundStyle::Petal,
+                    _ => {
+                        eprintln!("background must be shapes or petal: {value}");
+                        return ExitCode::FAILURE;
+                    }
+                };
+            }
             "--size" | "-s" => {
                 let Some(value) = args.next() else {
                     eprintln!("--size requires a value");
@@ -120,13 +135,14 @@ fn icon_main(mut args: impl Iterator<Item = String>) -> ExitCode {
         Some(signature) => icon_svg(
             &tags,
             layout,
+            background,
             &signature,
             style.style(),
             style.color,
             width,
             height,
         ),
-        None => background_svg(&tags, layout, width, height),
+        None => background_svg(&tags, layout, background, width, height),
     };
     println!("{svg}");
     ExitCode::SUCCESS
@@ -330,7 +346,7 @@ fn parse_size(value: &str) -> Option<(i32, i32)> {
 
 fn print_usage() {
     eprintln!(
-        "usage: picturesque-marks [--size W[xH]] [--signature TEXT] [--style STYLE] [--color HEX] [--layout LAYOUT] [TAG...]"
+        "usage: picturesque-marks [--size W[xH]] [--signature TEXT] [--style STYLE] [--color HEX] [--layout LAYOUT] [--background STYLE] [TAG...]"
     );
     eprintln!("       picturesque-marks signature [OPTIONS] TEXT");
     eprintln!("       picturesque-marks underline [OPTIONS] SEED");
@@ -350,6 +366,10 @@ fn print_usage() {
     eprintln!("                       grid: a 2x2 grid of tiles in the given order");
     eprintln!("                       overlay: the first tag at full size, the others as");
     eprintln!("                       half-transparent tiles over it");
+    eprintln!("  --background, -b STYLE");
+    eprintln!("                       what the background draws (default: shapes)");
+    eprintln!("                       shapes: a circle, diamond or pentagon with sub circles");
+    eprintln!("                       petal: three copies of one asymmetric petal");
     eprintln!("  signature            draw the signature mark alone; see `signature --help`");
     eprintln!("  underline            draw a sketchy underline instead; see `underline --help`");
 }
