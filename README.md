@@ -157,9 +157,9 @@ With `spikes`, the bezier stops at 78% to 86% of the width, three to five sharp 
 and a straight run brings the line to its end. Spike tips stay inside the viewBox.
 Coordinates are rounded to one decimal and written the way JavaScript prints numbers.
 
-## Changes since 0.3.0
+## Changes from 0.3.0
 
-Added `BackgroundStyle`, the argument after the layout of `background_svg` and `icon_svg`,
+Version 0.4.0 adds `BackgroundStyle`, the argument after the layout of `background_svg` and `icon_svg`,
 and the second argument of `IconBuilder::add_background_from_tag`. This is a breaking change.
 Pass `BackgroundStyle::default()` for the old `Shapes` look. `BackgroundStyle::Petal` draws
 three copies of one asymmetric petal instead of the shapes. See ADR-007.
